@@ -170,3 +170,19 @@
   bottom: 0;
   right: 0;
 }
+
+/* ============================================================
+   subtle 300ms opacity reveal for state transitions on /questions
+   (and anywhere else that wants the editorial fade). no library.
+   ============================================================ */
+@keyframes atlasFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.atlas-fade-in {
+  animation: atlasFadeIn 300ms ease-out;
+}

@@ -1,4 +1,5 @@
 import { MonoLabel } from "@/components/atlas";
+import { QuestionsFlow } from "@/components/questions/QuestionsFlow";
 
 export default function QuestionsPage() {
   return (
@@ -10,9 +11,10 @@ export default function QuestionsPage() {
       <p className="font-serif italic text-muted">
         the conversations nobody helps you have.
       </p>
-      <MonoLabel tone="green" className="self-end">
-        UNDER CONSTRUCTION
-      </MonoLabel>
+
+      <div className="mx-auto w-full max-w-[820px] py-16">
+        <QuestionsFlow />
+      </div>
     </div>
   );
 }
