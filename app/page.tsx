@@ -4,11 +4,11 @@ import { AtlasCard } from "@/components/atlas/Card";
 import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { LandingScrollLink } from "@/components/landing/LandingScrollLink";
 
-const GITHUB_URL = "https://github.com/nylaimanii/nest";
+const GITHUB_REPO = "https://github.com/nylaimanii/nest";
 const GITHUB_PROFILE = "https://github.com/nylaimanii";
-// portfolio + linkedin are placeholders for now — fill in when ready.
-const PORTFOLIO_URL = "#";
-const LINKEDIN_URL = "#";
+const PORTFOLIO_URL = "https://nyla-portfolio-xi.vercel.app";
+const LINKEDIN_URL = "https://linkedin.com/in/nylaimanii";
+const DEVPOST_URL = "https://devpost.com/nylaimanii7";
 
 const VIEWS = [
   {
@@ -37,6 +37,13 @@ const STATS = [
   { label: "THE GAP", value: "0.9", tone: "green" as const },
 ];
 
+const PROFILE_LINKS = [
+  { label: "GITHUB", href: GITHUB_PROFILE, external: true },
+  { label: "PORTFOLIO", href: PORTFOLIO_URL, external: true },
+  { label: "LINKEDIN", href: LINKEDIN_URL, external: true },
+  { label: "DEVPOST", href: DEVPOST_URL, external: true },
+];
+
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-bone text-ink">
@@ -50,7 +57,7 @@ export default function LandingPage() {
             nest
           </Link>
           <a
-            href={GITHUB_URL}
+            href={GITHUB_REPO}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-[0.8rem] text-muted transition-colors hover:text-ink"
@@ -89,12 +96,6 @@ export default function LandingPage() {
               targetId="how-it-works"
               label="SEE HOW IT WORKS ↓"
             />
-            <Link
-              href="/partners"
-              className="border-b border-line pb-0.5 font-serif text-[0.95rem] italic text-muted transition-colors hover:border-green hover:text-ink"
-            >
-              partner with nest
-            </Link>
           </div>
         </section>
 
@@ -184,61 +185,53 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ──────────────── 5. who's building this ──────────────── */}
+        {/* ──────────────── 5. who built this (closing) ──────────────── */}
         <section className="pt-32 pb-32">
           <div className="grid grid-cols-[180px_1fr] gap-16">
-            <MonoLabel tone="muted">04 · WHO</MonoLabel>
-            <div>
-              <h2 className="font-serif text-[2.2rem] leading-[1.15] lowercase text-ink">
-                built solo by nyla.
-              </h2>
-              <p className="mt-6 max-w-[60ch] text-[1.05rem] leading-[1.7] text-ink">
-                {"first-year computer science student at camden county college. two summer 2026 software internships in new york city — both stemming from a solo build at yhack at yale. six hackathons. nest is what happens when the most interesting problem i can find runs into a tool i actually want to make."}
-              </p>
-              <div className="mt-6 flex flex-wrap items-center gap-6 font-mono text-[0.85rem] text-muted">
-                <a
-                  href={GITHUB_PROFILE}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="border-b border-transparent transition-colors hover:border-line hover:text-ink"
-                >
-                  github → nylaimanii
-                </a>
-                <span aria-hidden>·</span>
-                <a
-                  href={PORTFOLIO_URL}
-                  className="border-b border-transparent transition-colors hover:border-line hover:text-ink"
-                >
-                  portfolio →
-                </a>
-                <span aria-hidden>·</span>
-                <a
-                  href={LINKEDIN_URL}
-                  className="border-b border-transparent transition-colors hover:border-line hover:text-ink"
-                >
-                  linkedin →
-                </a>
+            <MonoLabel tone="muted">04 · WHO BUILT THIS</MonoLabel>
+            <div className="grid grid-cols-[1.4fr_1fr] gap-12">
+              {/* prose */}
+              <div>
+                <h2 className="font-serif text-[2.4rem] leading-[1.15] lowercase text-ink">
+                  built solo by nyla wilson.
+                </h2>
+                <p className="mt-6 max-w-[52ch] text-[1.05rem] leading-[1.7] text-ink">
+                  {"first-year computer science student at camden county college. two summer 2026 software engineering internships in new york city — both stemming from a solo build at yhack at yale. six hackathons. nest is what happens when the most interesting problem i can find runs into a tool i actually want to make. it's built from the same conviction that drives the rest of the work: the most important things are worth doing carefully, by hand, and with a spine."}
+                </p>
+                <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[0.75rem] uppercase tracking-[0.15em] text-muted">
+                  {PROFILE_LINKS.map((p, i) => (
+                    <span key={p.label} className="contents">
+                      {i > 0 ? <span aria-hidden>·</span> : null}
+                      <a
+                        href={p.href}
+                        target={p.external ? "_blank" : undefined}
+                        rel={
+                          p.external ? "noopener noreferrer" : undefined
+                        }
+                        className="transition-colors hover:text-ink"
+                      >
+                        {p.label}
+                      </a>
+                    </span>
+                  ))}
+                </div>
               </div>
+
+              {/* notes from the build callout */}
+              <AtlasCard tone="default">
+                <MonoLabel tone="muted">NOTES FROM THE BUILD</MonoLabel>
+                <p className="mt-3 font-serif text-[1rem] italic leading-[1.5] text-ink">
+                  {"a short writeup on the determinism rule, the regret-gap reframe, and what the build taught me about modeling decisions honestly."}
+                </p>
+                <Link
+                  href="/notes"
+                  className="mt-4 inline-block border-b border-green/30 pb-0.5 font-serif text-[0.95rem] italic text-green transition-colors hover:border-green hover:text-green-2"
+                >
+                  read the notes →
+                </Link>
+              </AtlasCard>
             </div>
           </div>
-        </section>
-
-        {/* ──────────────── 6. partner CTA ──────────────── */}
-        <section className="pt-24 pb-32">
-          <AtlasCard tone="green" label="FOR DESIGN PARTNERS">
-            <h2 className="mt-1 max-w-[40ch] font-serif text-[1.8rem] leading-[1.2] lowercase text-ink">
-              {"if you're an employer, an insurer, or a policymaker — we want to talk."}
-            </h2>
-            <p className="mt-6 max-w-[58ch] text-[1.05rem] leading-[1.6] text-ink">
-              {"nest is being built openly. if you're navigating family benefits, demographic policy, or insurance design and want to pilot the tool with your population — write to us. v1 is a planning instrument; v2 becomes the intelligence layer between people and the family infrastructure the world is about to build."}
-            </p>
-            <Link
-              href="/partners"
-              className="mt-6 inline-block rounded-[2px] bg-green px-6 py-3 font-serif text-[1rem] italic text-bone transition-colors hover:bg-green-2"
-            >
-              open the partner letter →
-            </Link>
-          </AtlasCard>
         </section>
       </main>
 
@@ -258,9 +251,29 @@ export default function LandingPage() {
             <span aria-hidden>·</span>
             <a
               href={LINKEDIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="transition-colors hover:text-ink"
             >
               linkedin
+            </a>
+            <span aria-hidden>·</span>
+            <a
+              href={PORTFOLIO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-ink"
+            >
+              portfolio
+            </a>
+            <span aria-hidden>·</span>
+            <a
+              href={DEVPOST_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-ink"
+            >
+              devpost
             </a>
           </div>
         </div>
