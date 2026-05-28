@@ -1,6 +1,7 @@
 import { MonoLabel } from "@/components/atlas";
 import { HonestPanel } from "@/components/sim/HonestPanel";
 import { InputPanel } from "@/components/sim/InputPanel";
+import { RegretGap } from "@/components/sim/RegretGap";
 import { SimCanvas } from "@/components/sim/SimCanvas";
 
 export default function SimulationPage() {
@@ -13,6 +14,10 @@ export default function SimulationPage() {
       <p className="font-serif italic text-muted">
         drag the years. watch the tradeoffs change.
       </p>
+
+      <RegretGap />
+
+      <div className="my-2 h-px bg-line" />
 
       <div className="grid grid-cols-[360px_1fr_420px] gap-0">
         <InputPanel />
