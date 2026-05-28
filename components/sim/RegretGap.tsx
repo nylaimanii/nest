@@ -11,8 +11,15 @@ import type { GapSummary } from "@/lib/sim/drift";
 
 // rAF-driven ease-out cubic count. uses a ref for the from-value so re-runs
 // pick up the current animated state (not the stale initial state).
-function useAnimatedNumber(target: number, duration = 700): number {
-  const [value, setValue] = useState(target);
+// `initial` lets entrance animations start from a different value than
+// their target so the count animates on first mount (e.g. 0 → wantedKids
+// when the page loads already at revealStage 1).
+function useAnimatedNumber(
+  target: number,
+  duration = 700,
+  initial?: number,
+): number {
+  const [value, setValue] = useState(initial ?? target);
   const ref = useRef(value);
   ref.current = value;
 
@@ -42,8 +49,18 @@ export function RegretGap() {
   const setStage = useSimStore((s) => s.setRevealStage);
 
   // stage-1 entrance: both kid counts grow from 0 → real values over 700ms.
-  const wantedAnim = useAnimatedNumber(stage >= 1 ? gap.wantedKids : 0, 700);
-  const likelyEntrance = useAnimatedNumber(stage >= 1 ? gap.likelyKids : 0, 700);
+  // initial=0 forces a count-up on first mount even when revealStage starts
+  // at 1 (no 0→1 transition required).
+  const wantedAnim = useAnimatedNumber(
+    stage >= 1 ? gap.wantedKids : 0,
+    700,
+    0,
+  );
+  const likelyEntrance = useAnimatedNumber(
+    stage >= 1 ? gap.likelyKids : 0,
+    700,
+    0,
+  );
 
   // stage-3 close: likely climbs from likelyKids → wantedKids, gap → 0, 900ms.
   const likelyClosing = useAnimatedNumber(

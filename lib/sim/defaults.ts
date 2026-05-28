@@ -1,12 +1,16 @@
 import type { SimInputs } from "@/types";
 
+// representative starting user: a couple in their early thirties planning to
+// start trying in a few years for three kids. under the v1 drift model this
+// opens the regret-gap reveal on a visible 1-kid gap so the story is the
+// page's first impression, not "you're on track".
 export const DEFAULT_INPUTS: SimInputs = {
-  userAge: 28,
-  partnerAge: 30,
+  userAge: 31,
+  partnerAge: 32,
   householdIncome: 120000,
   city: "new york, ny",
-  kidsWanted: 2,
-  startAge: 32,
+  kidsWanted: 3,
+  startAge: 35,
   careerTrack: "ascending",
 };
 

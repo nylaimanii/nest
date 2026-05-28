@@ -56,6 +56,8 @@ export const useSimStore = create<SimState>((set) => ({
       revealStage: 0,
     }),
 
-  revealStage: 0,
+  // open the simulation on the gap split, not on a click-to-reveal teaser.
+  // stage 0 is reachable via the stage-3 "start over" action as a reset.
+  revealStage: 1,
   setRevealStage: (s) => set({ revealStage: s }),
 }));
