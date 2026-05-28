@@ -42,8 +42,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const clamp = (n: number, lo: number, hi: number) =>
   Math.min(Math.max(n, lo), hi);
 
-/** linear interpolation across the fertility anchors, clamped to [0.20, 0.94]. */
-function fertilityAt(age: number): number {
+/** linear interpolation across the fertility anchors, clamped to [0.20, 0.94].
+ *  exported so the FertilityCurve chart can sample the same curve. */
+export function fertilityAt(age: number): number {
   const lo = FERTILITY_ANCHORS[0];
   const hi = FERTILITY_ANCHORS[FERTILITY_ANCHORS.length - 1];
   if (age <= lo[0]) return lo[1];

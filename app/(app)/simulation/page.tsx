@@ -1,6 +1,7 @@
 import { MonoLabel } from "@/components/atlas";
 import { HonestPanel } from "@/components/sim/HonestPanel";
 import { InputPanel } from "@/components/sim/InputPanel";
+import { SimCanvas } from "@/components/sim/SimCanvas";
 
 export default function SimulationPage() {
   return (
@@ -15,9 +16,7 @@ export default function SimulationPage() {
 
       <div className="grid grid-cols-[360px_1fr_420px] gap-0">
         <InputPanel />
-        <div className="flex items-center justify-center py-24 text-center font-serif italic text-muted">
-          the curves arrive in step 5.
-        </div>
+        <SimCanvas />
         <HonestPanel />
       </div>
     </div>
