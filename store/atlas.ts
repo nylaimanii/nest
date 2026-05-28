@@ -40,7 +40,7 @@ function recompute(
 ): CityScore[] {
   const sim = useSimStore.getState();
   return roster.map((c) =>
-    scoreCity(c, weights, sim.inputs.householdIncome, sim.inputs.careerTrack),
+    scoreCity(c, weights, sim.inputs.householdIncome, sim.inputs.field),
   );
 }
 
@@ -86,3 +86,29 @@ export const useAtlasStore = create<AtlasState>((set) => ({
 
   setActiveCity: (id) => set({ activeCityId: id }),
 }));
+
+// live sim → atlas sync: any change to household income or field in the sim
+// store rebuilds the atlas scores against the current roster + weights, so
+// dragging an income slider on /simulation updates the atlas right-panel
+// numbers without the user needing to touch an atlas control first.
+// Zustand v5's vanilla subscribe supplies (state, prev); we diff manually
+// instead of pulling in subscribeWithSelector middleware.
+useSimStore.subscribe((state, prev) => {
+  if (
+    state.inputs.householdIncome === prev.inputs.householdIncome &&
+    state.inputs.field === prev.inputs.field
+  ) {
+    return;
+  }
+  const atlas = useAtlasStore.getState();
+  useAtlasStore.setState({
+    scores: atlas.roster.map((c) =>
+      scoreCity(
+        c,
+        atlas.weights,
+        state.inputs.householdIncome,
+        state.inputs.field,
+      ),
+    ),
+  });
+});

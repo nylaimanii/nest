@@ -12,6 +12,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   kidsWanted: 3,
   startAge: 35,
   careerTrack: "ascending",
+  field: "tech",
 };
 
 export const RANGES = {

@@ -17,6 +17,15 @@ export type SimInputs = {
   startAge: number;
   /** affects earnings shape */
   careerTrack: "steady" | "ascending" | "demanding";
+  /** field tag — matched against city.careerHubFor in atlas scoring. */
+  field:
+    | "tech"
+    | "finance"
+    | "biotech"
+    | "government"
+    | "manufacturing"
+    | "healthcare"
+    | "creative";
 };
 
 export type SimSnapshot = {

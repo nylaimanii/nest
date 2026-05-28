@@ -53,6 +53,7 @@ export function InputPanel() {
           <FixedRow term="PARTNER" value={inputs.partnerAge?.toString() ?? "—"} />
           <FixedRow term="CITY" value={inputs.city} />
           <FixedRow term="CAREER" value={inputs.careerTrack} />
+          <FixedRow term="FIELD" value={inputs.field} />
         </dl>
       </div>
     </div>
