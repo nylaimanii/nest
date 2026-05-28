@@ -9,9 +9,10 @@ export function InputPanel() {
   const inputs = useSimStore((s) => s.inputs);
   const setInput = useSimStore((s) => s.setInput);
 
-  // startAge never drops below userAge.
-  const startAgeMin = Math.max(RANGES.startAge.min, inputs.userAge);
-  const startAgeValue = Math.max(inputs.startAge, startAgeMin);
+  // startAge reaches the lower of the model floor (24) and userAge, so the
+  // high-fertility band stays reachable from the slider. (The marker math
+  // in FertilityCurve already clamps to the curve's [24,42] domain.)
+  const startAgeMin = Math.min(RANGES.startAge.min, inputs.userAge);
 
   return (
     <div className="flex max-w-[360px] flex-col gap-8 border-r border-line p-8">
@@ -27,11 +28,11 @@ export function InputPanel() {
         />
         <AtlasSlider
           label="start at age"
-          value={startAgeValue}
+          value={inputs.startAge}
           min={startAgeMin}
           max={RANGES.startAge.max}
           step={RANGES.startAge.step}
-          onChange={(v) => setInput("startAge", Math.max(v, startAgeMin))}
+          onChange={(v) => setInput("startAge", v)}
           format={(v) => `age ${v}`}
         />
         <AtlasSlider
