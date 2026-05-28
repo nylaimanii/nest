@@ -14,7 +14,7 @@ export default function AtlasViewPage() {
         the places, scored honestly — not just happily.
       </p>
 
-      <div className="grid grid-cols-[280px_1fr_420px] gap-0">
+      <div className="grid grid-cols-[280px_minmax(640px,1fr)_420px] gap-0">
         <RosterList />
         <div className="min-h-[560px] border-x border-line">
           <AtlasMap />
