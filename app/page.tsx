@@ -4,10 +4,6 @@ import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { LandingScrollLink } from "@/components/landing/LandingScrollLink";
 
 const GITHUB_REPO = "https://github.com/nylaimanii/nest";
-const GITHUB_PROFILE = "https://github.com/nylaimanii";
-const PORTFOLIO_URL = "https://nyla-portfolio-xi.vercel.app";
-const LINKEDIN_URL = "https://linkedin.com/in/nylaimanii";
-const DEVPOST_URL = "https://devpost.com/nylaimanii7";
 
 const VIEWS = [
   {
@@ -181,52 +177,13 @@ export default function LandingPage() {
 
       {/* ──────────────── footer ──────────────── */}
       <footer className="border-t border-line">
-        <div className="mx-auto flex h-20 max-w-[920px] items-center justify-between px-8 font-mono text-[0.75rem] text-muted">
-          <span>v0.1 · built solo by nyla wilson</span>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/notes"
-              className="transition-colors hover:text-ink"
-            >
-              notes
-            </Link>
-            <span aria-hidden>·</span>
-            <a
-              href={GITHUB_PROFILE}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-ink"
-            >
-              github
-            </a>
-            <span aria-hidden>·</span>
-            <a
-              href={PORTFOLIO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-ink"
-            >
-              portfolio
-            </a>
-            <span aria-hidden>·</span>
-            <a
-              href={LINKEDIN_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-ink"
-            >
-              linkedin
-            </a>
-            <span aria-hidden>·</span>
-            <a
-              href={DEVPOST_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-ink"
-            >
-              devpost
-            </a>
-          </div>
+        <div className="mx-auto flex h-20 max-w-[920px] items-center justify-end px-8">
+          <Link
+            href="/notes"
+            className="font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-ink"
+          >
+            notes
+          </Link>
         </div>
       </footer>
     </div>
