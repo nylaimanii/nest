@@ -15,9 +15,9 @@ export function Topbar() {
   return (
     <header className="sticky top-0 z-30 h-14 w-full border-b border-line bg-bone">
       <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-6">
-        {/* wordmark */}
+        {/* wordmark — back to landing */}
         <Link
-          href="/simulation"
+          href="/"
           className="font-serif text-[1.6rem] lowercase tracking-tight text-ink"
         >
           nest
