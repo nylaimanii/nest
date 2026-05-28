@@ -1,6 +1,8 @@
 import { create } from "zustand";
 
-import type { Scenario, Section } from "@/types";
+import { DEFAULT_INPUTS } from "@/lib/sim/defaults";
+import { useSimStore } from "@/store/sim";
+import type { Scenario, Section, SimInputs } from "@/types";
 
 interface AppState {
   section: Section;
@@ -8,7 +10,10 @@ interface AppState {
   scenarios: Scenario[];
   activeScenarioId: string | null;
   setActiveScenario: (id: string | null) => void;
-  addScenario: (label?: string) => string; // returns new id
+  /** captures the current useSimStore inputs into a new named scenario. */
+  addScenario: (label?: string) => string;
+  /** loads a scenario's saved inputs back into useSimStore. */
+  applyScenario: (id: string) => void;
   renameScenario: (id: string, label: string) => void;
   removeScenario: (id: string) => void;
 }
@@ -18,25 +23,47 @@ interface AppState {
 // scenarios use the real Date.now() since they're created client-side.
 const SEED_CREATED_AT = Date.UTC(2025, 0, 1, 9, 0, 0);
 
+const SEED_SCENARIO: Scenario = {
+  id: "default",
+  label: "scenario 01",
+  createdAt: SEED_CREATED_AT,
+  inputs: DEFAULT_INPUTS,
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   section: "simulation",
   setSection: (s) => set({ section: s }),
 
-  scenarios: [{ id: "default", label: "scenario 01", createdAt: SEED_CREATED_AT }],
+  scenarios: [SEED_SCENARIO],
   activeScenarioId: "default",
   setActiveScenario: (id) => set({ activeScenarioId: id }),
 
   addScenario: (label) => {
+    const inputs = useSimStore.getState().inputs;
     const id = crypto.randomUUID();
     const n = get().scenarios.length + 1;
     const finalLabel = label ?? `scenario ${String(n).padStart(2, "0")}`;
     set((state) => ({
       scenarios: [
         ...state.scenarios,
-        { id, label: finalLabel, createdAt: Date.now() },
+        { id, label: finalLabel, createdAt: Date.now(), inputs },
       ],
     }));
     return id;
+  },
+
+  applyScenario: (id) => {
+    const scenario = get().scenarios.find((s) => s.id === id);
+    if (!scenario) return;
+    const setInput = useSimStore.getState().setInput;
+    // loop over each input key and replay it through setInput. runSim re-runs
+    // on every key but the model is cheap (10 iterations); the sim store ends
+    // up with a snapshot built from the scenario's saved inputs.
+    (Object.keys(scenario.inputs) as (keyof SimInputs)[]).forEach((k) => {
+      // generic narrowing can't be done from a dynamic loop; cast through any.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setInput(k as any, scenario.inputs[k] as any);
+    });
   },
 
   renameScenario: (id, label) =>

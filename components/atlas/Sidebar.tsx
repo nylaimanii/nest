@@ -32,6 +32,7 @@ export function Sidebar() {
   const activeScenarioId = useAppStore((s) => s.activeScenarioId);
   const section = useAppStore((s) => s.section);
   const setActiveScenario = useAppStore((s) => s.setActiveScenario);
+  const applyScenario = useAppStore((s) => s.applyScenario);
   const addScenario = useAppStore((s) => s.addScenario);
 
   return (
@@ -46,7 +47,10 @@ export function Sidebar() {
               <li key={sc.id}>
                 <button
                   type="button"
-                  onClick={() => setActiveScenario(sc.id)}
+                  onClick={() => {
+                    applyScenario(sc.id);
+                    setActiveScenario(sc.id);
+                  }}
                   // every row keeps the same border-width + padding so
                   // activating only swaps the border color (no shift).
                   className={cn(

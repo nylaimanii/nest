@@ -1,4 +1,5 @@
 import { MonoLabel } from "@/components/atlas";
+import { CompareView } from "@/components/compare/CompareView";
 
 export default function ComparePage() {
   return (
@@ -10,9 +11,8 @@ export default function ComparePage() {
       <p className="font-serif italic text-muted">
         see two futures next to each other.
       </p>
-      <MonoLabel tone="green" className="self-end">
-        UNDER CONSTRUCTION
-      </MonoLabel>
+
+      <CompareView />
     </div>
   );
 }
