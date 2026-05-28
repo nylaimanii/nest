@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils";
 import { useSimStore } from "@/store/sim";
 import type { GapSummary } from "@/lib/sim/drift";
 
-// rAF-driven ease-out cubic count. uses a ref for the from-value so re-runs
-// pick up the current animated state (not the stale initial state).
+// rAF-driven ease-out cubic count. animation state lives entirely in a ref
+// (rafId + the latest tick value + the target we've already animated toward).
+// the ref is only ever written from inside the rAF callback and the effect
+// — never during render — so concurrent re-renders can't desync it.
 // `initial` lets entrance animations start from a different value than
 // their target so the count animates on first mount (e.g. 0 → wantedKids
 // when the page loads already at revealStage 1).
@@ -19,23 +21,44 @@ function useAnimatedNumber(
   duration = 700,
   initial?: number,
 ): number {
-  const [value, setValue] = useState(initial ?? target);
-  const ref = useRef(value);
-  ref.current = value;
+  const [value, setValue] = useState(() => initial ?? target);
+  const animRef = useRef<{
+    rafId: number;
+    current: number;
+    targetSeen: number | null;
+  }>({
+    rafId: 0,
+    current: initial ?? target,
+    targetSeen: null,
+  });
 
   useEffect(() => {
-    const from = ref.current;
+    // only (re)start when the requested target actually changes. this
+    // distinguishes "first mount with target X" from "later re-render
+    // happens to pass the same X" without depending on equality with
+    // the displayed state.
+    if (animRef.current.targetSeen === target) return;
+    animRef.current.targetSeen = target;
+
+    cancelAnimationFrame(animRef.current.rafId);
+
+    const from = animRef.current.current;
     if (from === target) return;
+
     const start = performance.now();
-    let raf = 0;
-    function tick(now: number) {
+    const tick = (now: number) => {
       const t = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-      setValue(from + (target - from) * eased);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+      const next = from + (target - from) * eased;
+      animRef.current.current = next;
+      setValue(next);
+      if (t < 1) {
+        animRef.current.rafId = requestAnimationFrame(tick);
+      }
+    };
+    animRef.current.rafId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(animRef.current.rafId);
   }, [target, duration]);
 
   return value;
@@ -208,7 +231,7 @@ function FrictionsList({ frictions }: { frictions: string[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <MonoLabel>WHAT&apos;S CLOSING THE GAP</MonoLabel>
+      <MonoLabel>WHAT&apos;S CAUSING THE GAP</MonoLabel>
       <ul className="flex flex-col gap-2">
         {frictions.map((f, i) => (
           <li

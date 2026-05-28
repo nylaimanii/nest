@@ -6,8 +6,14 @@
 import type { SimInputs, SimSnapshot } from "@/types";
 import { fertilityAt, runSim } from "./model";
 
-/** people consistently start ~3 years later than they intend. placeholder. */
-const DRIFT_DELAY = 3;
+/**
+ * how many years a planned start tends to slip. scales modestly with how
+ * late the wanted start already is — later planners drift more, which lets
+ * bigger gaps emerge under the same fertility ratio. placeholder.
+ */
+function driftDelayFor(startAge: number): number {
+  return 3 + Math.max(0, Math.floor((startAge - 32) / 3));
+}
 /** ceiling for the drift start age (after this it's a different conversation). */
 const DRIFT_MAX_AGE = 44;
 
@@ -25,7 +31,10 @@ function driftKidsFor(inputs: SimInputs): {
   driftStartAge: number;
   driftKids: number;
 } {
-  const driftStartAge = Math.min(inputs.startAge + DRIFT_DELAY, DRIFT_MAX_AGE);
+  const driftStartAge = Math.min(
+    inputs.startAge + driftDelayFor(inputs.startAge),
+    DRIFT_MAX_AGE,
+  );
   const fertWanted = fertilityAt(carrierAgeAt(inputs, inputs.startAge));
   const fertDrift = fertilityAt(carrierAgeAt(inputs, driftStartAge));
   const ratio = fertWanted > 0 ? fertDrift / fertWanted : 1;
