@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -47,18 +46,15 @@ export function NetCashChart() {
   }));
   const anyUnderwater = snap.netCashByYear.some((n) => n < 0);
 
-  // Recharts measures the DOM in ResponsiveContainer — render only after
-  // mount to keep SSR and client hydration identical (empty body on SSR).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
+  // ChartFrame gates rendering on a measured width > 0, so by the time
+  // ResponsiveContainer mounts the parent box has real dimensions — no
+  // more `width(-1)/height(-1)` warning on first paint.
   return (
     <ChartFrame
       label="NET HOUSEHOLD CASH"
       caption="after taxes and child costs, each year."
     >
-      {mounted ? (
-        <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 6, right: 8, bottom: 4, left: 8 }}>
             <CartesianGrid
               stroke={GRID.stroke}
@@ -108,7 +104,6 @@ export function NetCashChart() {
             />
           </LineChart>
         </ResponsiveContainer>
-      ) : null}
     </ChartFrame>
   );
 }

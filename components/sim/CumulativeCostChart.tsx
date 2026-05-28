@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -45,16 +44,12 @@ export function CumulativeCostChart() {
     cum: snap.cumulativeChildCost[i],
   }));
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   return (
     <ChartFrame
       label="CUMULATIVE CHILD COST"
       caption="what it adds up to over ten years."
     >
-      {mounted ? (
-        <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 4, left: 8 }}>
             <CartesianGrid
               stroke={GRID.stroke}
@@ -98,7 +93,6 @@ export function CumulativeCostChart() {
             />
           </AreaChart>
         </ResponsiveContainer>
-      ) : null}
     </ChartFrame>
   );
 }

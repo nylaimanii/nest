@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   CartesianGrid,
   Label,
@@ -71,9 +71,6 @@ export function FertilityCurve() {
 
   const data = useMemo(buildCurve, []);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   // near the right edge of the chart, sit the label to the left of the
   // dot so it doesn't clip; otherwise float it above.
   const labelPosition: "top" | "left" = markerAge >= 39 ? "left" : "top";
@@ -84,8 +81,7 @@ export function FertilityCurve() {
       caption="your chosen start age, marked on the curve. drag it."
       height={240}
     >
-      {mounted ? (
-        <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
             margin={{ top: 14, right: 16, bottom: 4, left: 8 }}
@@ -167,7 +163,6 @@ export function FertilityCurve() {
             </ReferenceDot>
           </LineChart>
         </ResponsiveContainer>
-      ) : null}
     </ChartFrame>
   );
 }
