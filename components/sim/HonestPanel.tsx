@@ -45,7 +45,9 @@ export function HonestPanel() {
         </AtlasCard>
       </div>
       <p className="font-serif italic text-muted">
-        numbers are v1 illustrative — sourced model lands later.
+        tax math reflects 2026 federal brackets and state lookup. childcare,
+        fertility, and benefits remain v1 illustrative — sourced data lands
+        later.
       </p>
     </div>
   );

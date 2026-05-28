@@ -2,6 +2,7 @@
 // Replace with sourced values + per-city deltas in lib/sim/model.real.ts later.
 
 import type { SimInputs, SimSnapshot } from "@/types";
+import { computeTakeHome, stateAbbrevFromCity, type FilingStatus } from "./tax";
 
 // ----- placeholder constants ------------------------------------------------
 
@@ -18,9 +19,10 @@ const INCOME_TRACK: Record<SimInputs["careerTrack"], readonly number[]> = {
   demanding: [1.0, 1.08, 1.16, 1.24, 1.32, 1.4, 1.48, 1.56, 1.64, 1.72],
 };
 
-// flat effective tax rate (placeholder).
-const TAX_RATE = 0.24;
-const TAKEHOME = 1 - TAX_RATE;
+// tax math now lives in lib/sim/tax.ts (2026 federal brackets + std
+// deduction + CTC + 10-state lookup). drift.ts/score.ts frictions still
+// use a 0.76 placeholder in their human-readable phrases — out of scope
+// for this step.
 
 // fertility curve anchors: [carrier age, chance of conceiving].
 const FERTILITY_ANCHORS: ReadonlyArray<readonly [number, number]> = [
@@ -83,25 +85,36 @@ export function runSim(inputs: SimInputs): SimSnapshot {
   // per-year totals
   const kidCost: number[] = [];
   const grossIncome: number[] = [];
+  const takeHomeByYear: number[] = [];
   const netCashByYear: number[] = [];
   const cumulativeChildCost: number[] = [];
 
   let running = 0;
   const track = INCOME_TRACK[inputs.careerTrack];
+  const filing: FilingStatus =
+    inputs.partnerAge != null ? "married_jointly" : "single";
+  const state = stateAbbrevFromCity(inputs.city);
 
   for (let i = 0; i < HORIZON; i++) {
     let yearKidCost = 0;
+    // CTC applies to dependents 0–17 — within our 10-year horizon every
+    // in-window arrival is below 18, but spec the check for clarity.
+    let kidsAlive = 0;
     for (const off of arrivalOffsets) {
       const kidAge = i - off;
       if (kidAge >= 0 && kidAge <= 9) {
         yearKidCost += KID_COST_BY_AGE[kidAge];
       }
+      if (kidAge >= 0 && kidAge <= 17) kidsAlive += 1;
     }
     const gross = inputs.householdIncome * track[i];
-    const net = round100(gross * TAKEHOME - yearKidCost);
+    const tax = computeTakeHome(gross, kidsAlive, filing, state);
+    const takeHome = tax.takeHome;
+    const net = round100(takeHome - yearKidCost);
 
     kidCost.push(yearKidCost);
     grossIncome.push(gross);
+    takeHomeByYear.push(takeHome);
     netCashByYear.push(net);
     running += yearKidCost;
     cumulativeChildCost.push(round100(running));
@@ -129,11 +142,11 @@ export function runSim(inputs: SimInputs): SimSnapshot {
       (inputs.householdIncome < 150000 ? 6000 : 3000),
   );
 
-  // peak burden ratio across the 10-year window.
+  // peak burden ratio across the 10-year window — uses real post-tax take-home.
   let peakBurden = 0;
   for (let i = 0; i < HORIZON; i++) {
-    const takehome = grossIncome[i] * TAKEHOME;
-    const ratio = takehome > 0 ? kidCost[i] / takehome : 0;
+    const th = takeHomeByYear[i];
+    const ratio = th > 0 ? kidCost[i] / th : 0;
     if (ratio > peakBurden) peakBurden = ratio;
   }
   const burdenRatio = round2(clamp(peakBurden, 0, 1));
@@ -143,6 +156,7 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     years,
     ageOverTime,
     netCashByYear,
+    takeHomeByYear,
     cumulativeChildCost,
     fertilityProbAtStart,
     lifetimeEarningsDelta,

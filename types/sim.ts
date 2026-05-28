@@ -34,8 +34,10 @@ export type SimSnapshot = {
   years: number[];
   /** length 10: user's age each year */
   ageOverTime: number[];
-  /** length 10: household cash flow each year (gross - taxes - kid costs) */
+  /** length 10: post-tax household cash flow each year (take-home − kid costs). */
   netCashByYear: number[];
+  /** length 10: post-tax take-home each year, BEFORE kid costs are subtracted. */
+  takeHomeByYear: number[];
   /** length 10: running total of kid costs */
   cumulativeChildCost: number[];
   /** chance of conceiving at startAge (0..1, 2 decimals) */

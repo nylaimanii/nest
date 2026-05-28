@@ -16,8 +16,8 @@ export const DEFAULT_INPUTS: SimInputs = {
 };
 
 export const RANGES = {
-  userAge: { min: 22, max: 45, step: 1 },
-  partnerAge: { min: 22, max: 45, step: 1 },
+  userAge: { min: 18, max: 55, step: 1 },
+  partnerAge: { min: 18, max: 55, step: 1 },
   householdIncome: { min: 40000, max: 400000, step: 5000 },
   kidsWanted: { min: 0, max: 4, step: 1 },
   startAge: { min: 24, max: 42, step: 1 },
