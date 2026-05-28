@@ -4,18 +4,27 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app";
 import { MonoLabel } from "./MonoLabel";
 
-// timeZone pinned to UTC so the server and client format the seeded
-// timestamp identically (a local-tz formatter would mismatch on hydration).
-const tsFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
-
-function formatTs(ms: number) {
-  return tsFmt.format(ms).toUpperCase();
+// build the timestamp via formatToParts so we get exactly "OCT 27 · 14:22":
+// month-short uppercased, day 2-digit, " · ", hour:minute in 24h.
+// the seeded row pins UTC so its SSR render matches client hydration;
+// new (client-only) rows render in the user's local timezone.
+function formatTs(ms: number, isSeeded: boolean) {
+  const opts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  };
+  if (isSeeded) opts.timeZone = "UTC";
+  const parts = new Intl.DateTimeFormat("en-US", opts).formatToParts(
+    new Date(ms),
+  );
+  const get = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("month").toUpperCase()} ${get("day")} · ${get("hour")}:${get(
+    "minute",
+  )}`;
 }
 
 export function Sidebar() {
@@ -32,14 +41,19 @@ export function Sidebar() {
         <ul className="flex flex-col gap-3">
           {scenarios.map((sc) => {
             const active = sc.id === activeScenarioId;
+            const isSeeded = sc.id === "default";
             return (
               <li key={sc.id}>
                 <button
                   type="button"
                   onClick={() => setActiveScenario(sc.id)}
+                  // every row keeps the same border-width + padding so
+                  // activating only swaps the border color (no shift).
                   className={cn(
-                    "block w-full pl-3 text-left",
-                    active && "border-l-2 border-l-green",
+                    "block w-full border-l-2 pl-3 text-left",
+                    active
+                      ? "border-[color:var(--color-green)]"
+                      : "border-transparent",
                   )}
                 >
                   <span
@@ -51,7 +65,7 @@ export function Sidebar() {
                     {sc.label}
                   </span>
                   <span className="mt-1 block font-mono text-[0.65rem] text-muted">
-                    {formatTs(sc.createdAt)}
+                    {formatTs(sc.createdAt, isSeeded)}
                   </span>
                 </button>
               </li>

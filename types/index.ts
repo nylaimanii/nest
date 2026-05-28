@@ -7,3 +7,7 @@ export type Scenario = {
   label: string;
   createdAt: number;
 };
+
+// simulation contract — defined in types/sim.ts, re-exported here so
+// downstream code imports a single canonical surface (`@/types`).
+export type { SimInputs, SimSnapshot } from "./sim";

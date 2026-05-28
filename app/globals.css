@@ -80,3 +80,61 @@
     color: var(--color-ink);
   }
 }
+
+/* ============================================================
+   AtlasSlider — scientific-atlas range input. flat 2px track,
+   ink square thumb (no radius, no shadow), deep-green focus ring.
+   Inline `style.background` paints the green-filled portion.
+   ============================================================ */
+@layer components {
+  .atlas-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2px;
+    background-color: var(--color-line);
+    outline: none;
+    cursor: pointer;
+  }
+  .atlas-slider::-webkit-slider-runnable-track {
+    height: 2px;
+    background: transparent;
+  }
+  .atlas-slider::-moz-range-track {
+    height: 2px;
+    background: transparent;
+  }
+  .atlas-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -6px; /* center 14px thumb on 2px track */
+    background-color: var(--color-ink);
+    border: 0;
+    border-radius: 0;
+    transition: transform 120ms ease;
+    cursor: pointer;
+  }
+  .atlas-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background-color: var(--color-ink);
+    border: 0;
+    border-radius: 0;
+    transition: transform 120ms ease;
+    cursor: pointer;
+  }
+  .atlas-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.143);
+  }
+  .atlas-slider:hover::-moz-range-thumb {
+    transform: scale(1.143);
+  }
+  .atlas-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px rgb(31 77 58 / 0.3);
+  }
+  .atlas-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 4px rgb(31 77 58 / 0.3);
+  }
+}
