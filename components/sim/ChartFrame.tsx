@@ -34,14 +34,34 @@ export function ChartFrame({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // mid-route client-side transitions can fire a measurement before
+    // tailwind's grid + min-w columns have resolved, leaving Recharts to
+    // see a width that lands at its `width(-1)` warning state. require a
+    // small sentinel for "layout has actually resolved", and defer the
+    // FIRST positive measurement by one rAF so the layout has settled.
+    let firstSettled = false;
+    let pendingRaf = 0;
+
     const measure = () => {
       const w = el.getBoundingClientRect().width;
-      if (w > 0) setWidth(w);
+      if (w <= 50) return;
+      if (!firstSettled) {
+        firstSettled = true;
+        cancelAnimationFrame(pendingRaf);
+        pendingRaf = requestAnimationFrame(() => setWidth(w));
+      } else {
+        setWidth(w);
+      }
     };
+
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(pendingRaf);
+    };
   }, []);
 
   return (
