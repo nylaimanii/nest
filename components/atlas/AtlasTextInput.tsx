@@ -57,13 +57,18 @@ export function AtlasTextInput({
   }
 
   function handleBlur() {
-    if (type !== "number" || min === undefined) return;
+    if (type !== "number") return;
     if (buffer === "" || buffer === "-") return; // leave intentionally-empty values alone
     const n = Number(buffer);
     if (!Number.isFinite(n)) return;
-    if (n < min) {
+    if (min !== undefined && n < min) {
       setBuffer(String(min));
       onChange(String(min));
+      return;
+    }
+    if (max !== undefined && n > max) {
+      setBuffer(String(max));
+      onChange(String(max));
     }
   }
 

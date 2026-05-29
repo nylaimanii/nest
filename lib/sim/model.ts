@@ -107,6 +107,9 @@ export function runSim(inputs: SimInputs): SimSnapshot {
 
   // kid arrival year offsets (0..HORIZON-1 or beyond if outside window).
   // spaced 2.5 years apart starting at startAge, rounded to whole years.
+  // for high kidsWanted (5+), some arrivals land past the 10-yr horizon —
+  // that's intentional: those kids don't contribute to the in-window cost,
+  // and the model silently ignores them via the kidAge bounds check below.
   const arrivalOffsets: number[] = [];
   for (let k = 0; k < inputs.kidsWanted; k++) {
     const arrivalAge = inputs.startAge + k * 2.5;

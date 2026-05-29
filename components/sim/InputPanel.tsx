@@ -1,7 +1,6 @@
 "use client";
 
 import { AtlasSelect } from "@/components/atlas/AtlasSelect";
-import { AtlasSlider } from "@/components/atlas/AtlasSlider";
 import { AtlasTextInput } from "@/components/atlas/AtlasTextInput";
 import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { RANGES } from "@/lib/sim/defaults";
@@ -41,34 +40,54 @@ export function InputPanel() {
   return (
     <div className="flex max-w-[360px] flex-col gap-10 border-r border-line p-8">
       {/* ───────────── section 1: what you want ───────────── */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         <MonoLabel>WHAT YOU WANT</MonoLabel>
-        <AtlasSlider
-          label="kids wanted"
+
+        <AtlasTextInput
+          label="KIDS WANTED"
           value={inputs.kidsWanted}
-          min={RANGES.kidsWanted.min}
-          max={RANGES.kidsWanted.max}
-          step={RANGES.kidsWanted.step}
-          onChange={(v) => setInput("kidsWanted", v)}
-          format={(v) => String(v)}
+          onChange={(s) => {
+            if (s === "" || s === "-") return;
+            const n = Number(s);
+            if (!Number.isFinite(n)) return;
+            // floor + clamp >=0 so non-integers settle to a clean int and
+            // negatives can't sneak through mid-typing. no upper cap.
+            setInput("kidsWanted", Math.max(0, Math.floor(n)));
+          }}
+          type="number"
+          min={0}
+          step={1}
         />
-        <AtlasSlider
-          label="start at age"
+
+        <AtlasTextInput
+          label="START AT AGE"
           value={inputs.startAge}
+          onChange={(s) => {
+            if (s === "" || s === "-") return;
+            const n = Number(s);
+            if (!Number.isFinite(n)) return;
+            setInput("startAge", Math.round(n));
+          }}
+          type="number"
           min={startAgeMin}
           max={RANGES.startAge.max}
-          step={RANGES.startAge.step}
-          onChange={(v) => setInput("startAge", v)}
-          format={(v) => `age ${v}`}
+          step={1}
         />
-        <AtlasSlider
-          label="household income"
+
+        <AtlasTextInput
+          label="HOUSEHOLD INCOME"
           value={inputs.householdIncome}
-          min={RANGES.householdIncome.min}
-          max={RANGES.householdIncome.max}
-          step={RANGES.householdIncome.step}
-          onChange={(v) => setInput("householdIncome", v)}
-          format={(v) => `$${v.toLocaleString("en-US")}`}
+          onChange={(s) => {
+            if (s === "" || s === "-") return;
+            const n = Number(s);
+            if (!Number.isFinite(n)) return;
+            // accept any positive integer; no upper cap so users can model
+            // their real income, not a slider-bound proxy.
+            setInput("householdIncome", Math.max(0, Math.round(n)));
+          }}
+          type="number"
+          min={0}
+          step={1}
         />
       </div>
 
