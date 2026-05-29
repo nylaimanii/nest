@@ -10,30 +10,12 @@
 import { NextResponse } from "next/server";
 
 import type { CityProfile, SourceTag } from "@/lib/atlas/cityProfile";
+import { US_STATE_ABBR } from "@/lib/atlas/usStates";
 
 export const revalidate = 86400; // 24h
 
 const REVALIDATE_OPTS = { next: { revalidate: 86400 } } as const;
 const TIMEOUT_MS = 8000;
-
-// US state name (lowercased) → 2-letter postal code. duplicated from the
-// /api/geocode route since that file deliberately doesn't export this map
-// and the current step's instructions forbid touching it.
-const STATE_ABBR: Record<string, string> = {
-  alabama: "al", alaska: "ak", arizona: "az", arkansas: "ar", california: "ca",
-  colorado: "co", connecticut: "ct", delaware: "de", florida: "fl", georgia: "ga",
-  hawaii: "hi", idaho: "id", illinois: "il", indiana: "in", iowa: "ia",
-  kansas: "ks", kentucky: "ky", louisiana: "la", maine: "me", maryland: "md",
-  massachusetts: "ma", michigan: "mi", minnesota: "mn", mississippi: "ms",
-  missouri: "mo", montana: "mt", nebraska: "ne", nevada: "nv",
-  "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm",
-  "new york": "ny", "north carolina": "nc", "north dakota": "nd",
-  ohio: "oh", oklahoma: "ok", oregon: "or", pennsylvania: "pa",
-  "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
-  tennessee: "tn", texas: "tx", utah: "ut", vermont: "vt", virginia: "va",
-  washington: "wa", "west virginia": "wv", wisconsin: "wi", wyoming: "wy",
-  "district of columbia": "dc",
-};
 
 const clamp = (n: number, lo: number, hi: number) =>
   Math.min(Math.max(n, lo), hi);
@@ -128,7 +110,7 @@ async function geocodeViaOSM(q: string): Promise<OSMResult | null> {
   const isUS = countryCode === "US" || countryName === "United States";
 
   const stateName = (addr.state ?? "").toLowerCase();
-  const stateAbbr = isUS ? STATE_ABBR[stateName] ?? "" : "";
+  const stateAbbr = isUS ? US_STATE_ABBR[stateName] ?? "" : "";
 
   return { lat, lng, cityName, countryName, countryCode, stateAbbr, isUS };
 }

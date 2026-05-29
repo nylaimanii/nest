@@ -5,61 +5,7 @@
 
 import { NextResponse } from "next/server";
 
-// US state name -> postal abbrev (lowercased), for normalizing the geocoded
-// display into our "city, st" convention.
-const STATE_ABBR: Record<string, string> = {
-  alabama: "al",
-  alaska: "ak",
-  arizona: "az",
-  arkansas: "ar",
-  california: "ca",
-  colorado: "co",
-  connecticut: "ct",
-  delaware: "de",
-  florida: "fl",
-  georgia: "ga",
-  hawaii: "hi",
-  idaho: "id",
-  illinois: "il",
-  indiana: "in",
-  iowa: "ia",
-  kansas: "ks",
-  kentucky: "ky",
-  louisiana: "la",
-  maine: "me",
-  maryland: "md",
-  massachusetts: "ma",
-  michigan: "mi",
-  minnesota: "mn",
-  mississippi: "ms",
-  missouri: "mo",
-  montana: "mt",
-  nebraska: "ne",
-  nevada: "nv",
-  "new hampshire": "nh",
-  "new jersey": "nj",
-  "new mexico": "nm",
-  "new york": "ny",
-  "north carolina": "nc",
-  "north dakota": "nd",
-  ohio: "oh",
-  oklahoma: "ok",
-  oregon: "or",
-  pennsylvania: "pa",
-  "rhode island": "ri",
-  "south carolina": "sc",
-  "south dakota": "sd",
-  tennessee: "tn",
-  texas: "tx",
-  utah: "ut",
-  vermont: "vt",
-  virginia: "va",
-  washington: "wa",
-  "west virginia": "wv",
-  wisconsin: "wi",
-  wyoming: "wy",
-  "district of columbia": "dc",
-};
+import { US_STATE_ABBR } from "@/lib/atlas/usStates";
 
 type NominatimHit = {
   lat: string;
@@ -109,7 +55,7 @@ export async function GET(req: Request) {
   const cityPart =
     addr.city ?? addr.town ?? addr.village ?? addr.county ?? r.display_name.split(",")[0] ?? q;
   const stateName = (addr.state ?? "").toLowerCase();
-  const stateAbbr = STATE_ABBR[stateName] ?? "";
+  const stateAbbr = US_STATE_ABBR[stateName] ?? "";
 
   const cleanCity = cityPart.toLowerCase().replace(/\s+/g, " ").trim();
   // "city, st" for US (when we recognized the state); "city, country" for
