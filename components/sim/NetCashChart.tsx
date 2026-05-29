@@ -5,7 +5,6 @@ import {
   Line,
   LineChart,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -21,7 +20,7 @@ import {
   fmtUSDFull,
 } from "@/lib/sim/chartTheme";
 import { useSimStore } from "@/store/sim";
-import { ChartFrame } from "./ChartFrame";
+import { ChartFrame, useChartFrame } from "./ChartFrame";
 
 type Row = { year: number; net: number };
 
@@ -38,7 +37,8 @@ function CashTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function NetCashChart() {
+function NetCashBody() {
+  const { width, height } = useChartFrame();
   const snap = useSimStore((s) => s.snapshot);
   const data: Row[] = snap.years.map((year, i) => ({
     year,
@@ -46,64 +46,73 @@ export function NetCashChart() {
   }));
   const anyUnderwater = snap.netCashByYear.some((n) => n < 0);
 
-  // ChartFrame gates rendering on a measured width > 0, so by the time
-  // ResponsiveContainer mounts the parent box has real dimensions — no
-  // more `width(-1)/height(-1)` warning on first paint.
+  return (
+    <LineChart
+      width={width}
+      height={height}
+      data={data}
+      margin={{ top: 6, right: 8, bottom: 4, left: 8 }}
+    >
+      <CartesianGrid
+        stroke={GRID.stroke}
+        strokeDasharray={GRID.strokeDasharray}
+        vertical={false}
+      />
+      <XAxis
+        dataKey="year"
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        interval={1}
+        padding={{ left: 4, right: 4 }}
+      />
+      <YAxis
+        tickFormatter={fmtUSD}
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        width={52}
+      />
+      {anyUnderwater ? (
+        <ReferenceLine
+          y={0}
+          stroke={CHART.terracotta}
+          strokeDasharray="3 3"
+          strokeWidth={1}
+        />
+      ) : null}
+      <Tooltip
+        content={CashTooltip}
+        cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
+      />
+      <Line
+        type="monotone"
+        dataKey="net"
+        stroke={CHART.green}
+        strokeWidth={2}
+        dot={false}
+        activeDot={{
+          r: 3,
+          fill: CHART.green,
+          stroke: CHART.bone,
+          strokeWidth: 2,
+        }}
+        isAnimationActive={false}
+      />
+    </LineChart>
+  );
+}
+
+export function NetCashChart() {
+  // ChartFrame owns the width measurement and feeds {width, height} to the
+  // inner body via context, which passes them as explicit numeric props to
+  // LineChart — Recharts never enters its width(-1) sentinel state.
   return (
     <ChartFrame
       label="NET HOUSEHOLD CASH"
       caption="after taxes and child costs, each year."
     >
-      <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 6, right: 8, bottom: 4, left: 8 }}>
-            <CartesianGrid
-              stroke={GRID.stroke}
-              strokeDasharray={GRID.strokeDasharray}
-              vertical={false}
-            />
-            <XAxis
-              dataKey="year"
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              interval={1}
-              padding={{ left: 4, right: 4 }}
-            />
-            <YAxis
-              tickFormatter={fmtUSD}
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              width={52}
-            />
-            {anyUnderwater ? (
-              <ReferenceLine
-                y={0}
-                stroke={CHART.terracotta}
-                strokeDasharray="3 3"
-                strokeWidth={1}
-              />
-            ) : null}
-            <Tooltip
-              content={CashTooltip}
-              cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
-            />
-            <Line
-              type="monotone"
-              dataKey="net"
-              stroke={CHART.green}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{
-                r: 3,
-                fill: CHART.green,
-                stroke: CHART.bone,
-                strokeWidth: 2,
-              }}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <NetCashBody />
     </ChartFrame>
   );
 }

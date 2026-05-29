@@ -27,9 +27,14 @@ export function AtlasMap() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // flipped by onLoad — useFitToRoster waits on this so its initial snap-
+  // fit doesn't fire before the map's container has dimensions.
+  const [mapReady, setMapReady] = useState(false);
+
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (map) applyAtlasPalette(map);
+    setMapReady(true);
   }, []);
 
   // re-apply if the style ever reloads (e.g. base style swap, sprite reload).
@@ -44,7 +49,7 @@ export function AtlasMap() {
     };
   }, [mounted]);
 
-  useFitToRoster(mapRef, roster);
+  useFitToRoster(mapRef, roster, mapReady);
 
   return (
     <div

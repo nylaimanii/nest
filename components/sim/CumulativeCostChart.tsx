@@ -4,7 +4,6 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -20,7 +19,7 @@ import {
   fmtUSDFull,
 } from "@/lib/sim/chartTheme";
 import { useSimStore } from "@/store/sim";
-import { ChartFrame } from "./ChartFrame";
+import { ChartFrame, useChartFrame } from "./ChartFrame";
 
 type Row = { year: number; cum: number };
 
@@ -37,7 +36,8 @@ function CumTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function CumulativeCostChart() {
+function CumulativeCostBody() {
+  const { width, height } = useChartFrame();
   const snap = useSimStore((s) => s.snapshot);
   const data: Row[] = snap.years.map((year, i) => ({
     year,
@@ -45,54 +45,63 @@ export function CumulativeCostChart() {
   }));
 
   return (
+    <AreaChart
+      width={width}
+      height={height}
+      data={data}
+      margin={{ top: 6, right: 8, bottom: 4, left: 8 }}
+    >
+      <CartesianGrid
+        stroke={GRID.stroke}
+        strokeDasharray={GRID.strokeDasharray}
+        vertical={false}
+      />
+      <XAxis
+        dataKey="year"
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        interval={1}
+        padding={{ left: 4, right: 4 }}
+      />
+      <YAxis
+        tickFormatter={fmtUSD}
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        width={52}
+      />
+      <Tooltip
+        content={CumTooltip}
+        cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
+      />
+      <Area
+        type="monotone"
+        dataKey="cum"
+        stroke={CHART.green}
+        strokeWidth={2}
+        fill={CHART.green}
+        fillOpacity={0.12}
+        dot={false}
+        activeDot={{
+          r: 3,
+          fill: CHART.green,
+          stroke: CHART.bone,
+          strokeWidth: 2,
+        }}
+        isAnimationActive={false}
+      />
+    </AreaChart>
+  );
+}
+
+export function CumulativeCostChart() {
+  return (
     <ChartFrame
       label="CUMULATIVE CHILD COST"
       caption="what it adds up to over ten years."
     >
-      <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 4, left: 8 }}>
-            <CartesianGrid
-              stroke={GRID.stroke}
-              strokeDasharray={GRID.strokeDasharray}
-              vertical={false}
-            />
-            <XAxis
-              dataKey="year"
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              interval={1}
-              padding={{ left: 4, right: 4 }}
-            />
-            <YAxis
-              tickFormatter={fmtUSD}
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              width={52}
-            />
-            <Tooltip
-              content={CumTooltip}
-              cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
-            />
-            <Area
-              type="monotone"
-              dataKey="cum"
-              stroke={CHART.green}
-              strokeWidth={2}
-              fill={CHART.green}
-              fillOpacity={0.12}
-              dot={false}
-              activeDot={{
-                r: 3,
-                fill: CHART.green,
-                stroke: CHART.bone,
-                strokeWidth: 2,
-              }}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      <CumulativeCostBody />
     </ChartFrame>
   );
 }

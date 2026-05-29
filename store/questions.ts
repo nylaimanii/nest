@@ -160,12 +160,13 @@ export const useQuestionsStore = create<QuestionsState>((set, get) => ({
   },
 
   applySuggestions: () => {
-    const { suggestions } = get();
-    const setInput = useSimStore.getState().setInput;
+    // snapshot the array first, then iterate EVERY entry — re-read setInput
+    // from the live sim store on each iteration so a stale action ref can't
+    // skip a field (kidsWanted vs careerTrack vs startAge all need to land).
+    const suggestions = get().suggestions;
     for (const s of suggestions) {
-      // dynamic key/value pair from a typed union; the sim store accepts it.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setInput(s.field as any, s.to as any);
+      useSimStore.getState().setInput(s.field as any, s.to as any);
     }
   },
 

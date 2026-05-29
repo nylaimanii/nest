@@ -8,7 +8,6 @@ import {
   LineChart,
   ReferenceDot,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -24,7 +23,7 @@ import {
 } from "@/lib/sim/chartTheme";
 import { fertilityAt } from "@/lib/sim/model";
 import { useSimStore } from "@/store/sim";
-import { ChartFrame } from "./ChartFrame";
+import { ChartFrame, useChartFrame } from "./ChartFrame";
 
 type Row = { age: number; prob: number };
 
@@ -54,7 +53,8 @@ function CurveTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function FertilityCurve() {
+function FertilityCurveBody() {
+  const { width, height } = useChartFrame();
   const inputs = useSimStore((s) => s.inputs);
   const snap = useSimStore((s) => s.snapshot);
 
@@ -76,93 +76,99 @@ export function FertilityCurve() {
   const labelPosition: "top" | "left" = markerAge >= 39 ? "left" : "top";
 
   return (
+    <LineChart
+      width={width}
+      height={height}
+      data={data}
+      margin={{ top: 14, right: 16, bottom: 4, left: 8 }}
+    >
+      <CartesianGrid
+        stroke={GRID.stroke}
+        strokeDasharray={GRID.strokeDasharray}
+        vertical={false}
+      />
+      <XAxis
+        dataKey="age"
+        type="number"
+        domain={[24, 42]}
+        ticks={[24, 28, 32, 36, 40]}
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        padding={{ left: 4, right: 4 }}
+      />
+      <YAxis
+        type="number"
+        domain={[0, 100]}
+        ticks={[0, 25, 50, 75, 100]}
+        tickFormatter={fmtPct}
+        tick={AXIS_TICK}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        width={42}
+      />
+      <Tooltip
+        content={CurveTooltip}
+        cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
+      />
+
+      {/* the curve itself — ink, monotone, no dots. */}
+      <Line
+        type="monotone"
+        dataKey="prob"
+        stroke={CHART.ink}
+        strokeWidth={1.5}
+        dot={false}
+        activeDot={false}
+        isAnimationActive={false}
+      />
+
+      {/* dropped reference lines through the marker. */}
+      <ReferenceLine
+        x={markerAge}
+        stroke={CHART.green}
+        strokeDasharray="3 3"
+        strokeWidth={1}
+      />
+      <ReferenceLine
+        y={markerPct}
+        stroke={CHART.green}
+        strokeOpacity={0.25}
+        strokeDasharray="3 3"
+        strokeWidth={1}
+      />
+
+      {/* the marker — recomputes from the live snapshot. */}
+      <ReferenceDot
+        x={markerAge}
+        y={markerPct}
+        r={6}
+        fill={CHART.green}
+        stroke={CHART.bone}
+        strokeWidth={2}
+      >
+        <Label
+          value={`${markerPct}% @ age ${markerAge}`}
+          position={labelPosition}
+          offset={12}
+          fill={CHART.green}
+          fontFamily="var(--font-mono)"
+          fontSize={11}
+          fontWeight={500}
+        />
+      </ReferenceDot>
+    </LineChart>
+  );
+}
+
+export function FertilityCurve() {
+  return (
     <ChartFrame
       label="FERTILITY BY START AGE"
       caption="your chosen start age, marked on the curve. drag it."
       height={240}
     >
-      <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={data}
-            margin={{ top: 14, right: 16, bottom: 4, left: 8 }}
-          >
-            <CartesianGrid
-              stroke={GRID.stroke}
-              strokeDasharray={GRID.strokeDasharray}
-              vertical={false}
-            />
-            <XAxis
-              dataKey="age"
-              type="number"
-              domain={[24, 42]}
-              ticks={[24, 28, 32, 36, 40]}
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              padding={{ left: 4, right: 4 }}
-            />
-            <YAxis
-              type="number"
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickFormatter={fmtPct}
-              tick={AXIS_TICK}
-              axisLine={AXIS_LINE}
-              tickLine={false}
-              width={42}
-            />
-            <Tooltip
-              content={CurveTooltip}
-              cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
-            />
-
-            {/* the curve itself — ink, monotone, no dots. */}
-            <Line
-              type="monotone"
-              dataKey="prob"
-              stroke={CHART.ink}
-              strokeWidth={1.5}
-              dot={false}
-              activeDot={false}
-              isAnimationActive={false}
-            />
-
-            {/* dropped reference lines through the marker. */}
-            <ReferenceLine
-              x={markerAge}
-              stroke={CHART.green}
-              strokeDasharray="3 3"
-              strokeWidth={1}
-            />
-            <ReferenceLine
-              y={markerPct}
-              stroke={CHART.green}
-              strokeOpacity={0.25}
-              strokeDasharray="3 3"
-              strokeWidth={1}
-            />
-
-            {/* the marker — recomputes from the live snapshot. */}
-            <ReferenceDot
-              x={markerAge}
-              y={markerPct}
-              r={6}
-              fill={CHART.green}
-              stroke={CHART.bone}
-              strokeWidth={2}
-            >
-              <Label
-                value={`${markerPct}% @ age ${markerAge}`}
-                position={labelPosition}
-                offset={12}
-                fill={CHART.green}
-                fontFamily="var(--font-mono)"
-                fontSize={11}
-                fontWeight={500}
-              />
-            </ReferenceDot>
-          </LineChart>
-        </ResponsiveContainer>
+      <FertilityCurveBody />
     </ChartFrame>
   );
 }
