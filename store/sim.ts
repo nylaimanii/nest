@@ -29,10 +29,12 @@ interface SimState {
   setDraftInput: <K extends keyof SimInputs>(k: K, v: SimInputs[K]) => void;
   /** copies draftInputs → inputs and recomputes the snapshot/drift/gap. */
   recompute: () => void;
-  /** atomically replaces BOTH draft + committed inputs and recomputes —
-   *  used for scenario load, /questions suggestions, reset. bypasses the
-   *  draft/commit flow so downstream consumers see the new state at once. */
-  applyInputs: (inputs: SimInputs) => void;
+  /** atomically merges into BOTH draft + committed inputs and recomputes —
+   *  used for scenario load, /questions suggestions, onboarding, reset.
+   *  bypasses the draft/commit flow so downstream consumers see the new
+   *  state at once. accepts Partial so callers that only have some keys
+   *  (onboarding form) don't have to spread the current inputs themselves. */
+  applyInputs: (inputs: Partial<SimInputs>) => void;
   reset: () => void;
 
   /** 0 = resting, 1 = gap, 2 = frictions, 3 = navigable path. */
@@ -77,13 +79,16 @@ export const useSimStore = create<SimState>((set) => ({
     })),
 
   applyInputs: (next) =>
-    set({
-      draftInputs: next,
-      inputs: next,
-      snapshot: runSim(next),
-      driftSnapshot: runDrift(next),
-      gap: gapSummary(next),
-      isDirty: false,
+    set((state) => {
+      const merged: SimInputs = { ...state.inputs, ...next };
+      return {
+        draftInputs: merged,
+        inputs: merged,
+        snapshot: runSim(merged),
+        driftSnapshot: runDrift(merged),
+        gap: gapSummary(merged),
+        isDirty: false,
+      };
     }),
 
   reset: () =>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MonoLabel } from "@/components/atlas/MonoLabel";
+import { ReOnboardLink } from "@/components/onboarding/ReOnboardLink";
 
 export default function NotesPage() {
   return (
@@ -50,12 +51,15 @@ export default function NotesPage() {
           more notes might land here as i keep building. — n.
         </p>
 
-        <Link
-          href="/"
-          className="mt-8 inline-block font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-ink"
-        >
-          ← back to nest
-        </Link>
+        <div className="mt-8 flex items-center gap-6">
+          <Link
+            href="/"
+            className="inline-block font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-ink"
+          >
+            ← back to nest
+          </Link>
+          <ReOnboardLink />
+        </div>
       </main>
     </div>
   );
