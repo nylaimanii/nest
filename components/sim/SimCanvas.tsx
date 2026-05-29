@@ -11,7 +11,7 @@ import { NetCashChart } from "./NetCashChart";
  */
 export function SimCanvas() {
   return (
-    <div className="flex min-w-[380px] flex-col gap-10 p-8">
+    <div className="flex min-w-0 flex-col gap-10 p-8">
       <FertilityCurve />
       <NetCashChart />
       <CumulativeCostChart />

@@ -22,11 +22,14 @@ const KID_COST_BY_AGE_FALLBACK = [
 // childcare-heavy years 0–3 at full annual; tapers post-school start.
 const AGE_MULTIPLIERS = [1, 1, 1, 0.8, 0.6, 0.6, 0.4, 0.4, 0.4, 0.4] as const;
 
-/** city-sourced 10-year cost curve per kid. falls back to placeholder. */
+/** city-sourced 10-year cost curve per kid. falls back to placeholder for the
+ *  cost-curve math, but the displayed `childcareMonthlyUsed` is null when we
+ *  don't have a real source — the HonestPanel surfaces this as "—" / "NO
+ *  DATA" rather than showing a confident number for a city we can't price. */
 function kidCostCurveFor(city: string): {
   curve: number[];
   sourced: boolean;
-  childcareMonthlyUsed: number;
+  childcareMonthlyUsed: number | null;
 } {
   const hit = findCityByName(city);
   if (hit && hit.childcareMonthly !== null) {
@@ -43,8 +46,7 @@ function kidCostCurveFor(city: string): {
   return {
     curve: Array.from(KID_COST_BY_AGE_FALLBACK),
     sourced: false,
-    // the fallback first-three-years cost ÷ 12, just to give the UI a number.
-    childcareMonthlyUsed: Math.round(KID_COST_BY_AGE_FALLBACK[0] / 12 / 100) * 100,
+    childcareMonthlyUsed: null,
   };
 }
 

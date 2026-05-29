@@ -79,27 +79,24 @@ export function RegretGap() {
     700,
     0,
   );
-  const likelyEntrance = useAnimatedNumber(
+  const likelyAnim = useAnimatedNumber(
     stage >= 1 ? gap.likelyKids : 0,
     700,
     0,
   );
 
-  // stage-3 close: likely climbs from likelyKids → wantedKids, gap → 0, 900ms.
-  const likelyClosing = useAnimatedNumber(
-    stage === 3 ? gap.wantedKids : gap.likelyKids,
-    900,
-  );
-  const gapAnim = useAnimatedNumber(stage === 3 ? 0 : gap.kidGap, 900);
-
   if (stage === 0) {
     return <StageZero gap={gap} onAdvance={() => setStage(1)} />;
   }
 
+  // headline numbers all read from gap.kidGap / gap.likelyKids / gap.wantedKids
+  // identically across stages — the previous stage-3 override animated gap → 0
+  // and likely → wantedKids, which contradicted the prose ("X of N kids" still
+  // referenced gap.kidGap). honest math: every visible number agrees with the
+  // friction sentences and the navigable-path callout's narrative.
   const wantedDisplay = Math.round(wantedAnim);
-  const likelyDisplay =
-    stage === 3 ? Math.round(likelyClosing) : Math.round(likelyEntrance);
-  const gapDisplay = stage === 3 ? Math.round(gapAnim) : gap.kidGap;
+  const likelyDisplay = Math.round(likelyAnim);
+  const gapDisplay = gap.kidGap;
 
   const onTrack = gap.kidGap === 0;
   const gapZero = gapDisplay === 0;

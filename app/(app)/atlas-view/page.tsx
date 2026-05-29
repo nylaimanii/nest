@@ -20,12 +20,20 @@ export default function AtlasViewPage() {
         <RecomputeButton />
       </div>
 
-      <div className="grid grid-cols-[280px_minmax(640px,1fr)_420px] gap-0">
+      {/* responsive layout: at viewport ≥1400px the detail panel sits
+          inline as the third column; below that it drops to a full-width
+          band under the map so it isn't clipped on 13" laptop screens.
+          col-span-2 on the panel under 1400px makes it span both row 1
+          columns; the min-[1400px] variant reverts to its natural single
+          column in the wider 3-col grid. */}
+      <div className="grid grid-cols-[280px_minmax(0,1fr)] gap-0 min-[1400px]:grid-cols-[280px_minmax(540px,1fr)_420px]">
         <AtlasSidebar />
         <div className="min-h-[560px] border-x border-line">
           <AtlasMap />
         </div>
-        <CityHonestPanel />
+        <div className="col-span-2 border-t border-line min-[1400px]:col-span-1 min-[1400px]:border-t-0">
+          <CityHonestPanel />
+        </div>
       </div>
     </div>
   );

@@ -25,10 +25,17 @@ export default function SimulationPage() {
 
       <div className="my-2 h-px bg-line" />
 
-      <div className="grid grid-cols-[360px_1fr_420px] gap-0">
+      {/* two-column layout — inputs on the left, charts + honest panel
+          stacked vertically on the right. the previous 3-column grid
+          (360 / 1fr / 420) clipped HonestPanel at 13" laptop widths. */}
+      <div className="grid grid-cols-[360px_minmax(0,1fr)] gap-0">
         <InputPanel />
-        <SimCanvas />
-        <HonestPanel />
+        <div className="flex min-w-0 flex-col">
+          <SimCanvas />
+          <div className="border-t border-line">
+            <HonestPanel />
+          </div>
+        </div>
       </div>
     </div>
   );

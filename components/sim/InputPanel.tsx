@@ -112,6 +112,11 @@ export function InputPanel() {
           type="number"
           min={0}
           step={1}
+          hint={
+            draft.kidsWanted > 10
+              ? "more than 10 kids — math runs but visualizations may compress."
+              : undefined
+          }
         />
 
         <AtlasTextInput

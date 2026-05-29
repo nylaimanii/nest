@@ -46,6 +46,110 @@ const INITIAL_FORM: FormState = {
   partnerField: "registered nurse",
 };
 
+// keys validation can flag. workIntensity / field / partnerWorkIntensity /
+// partnerField have defaults so they never error.
+type ValidatedKey =
+  | "userAge"
+  | "partnerAge"
+  | "city"
+  | "kidsWanted"
+  | "startAge"
+  | "income"
+  | "partnerIncome";
+
+type ErrorMap = Partial<Record<ValidatedKey, string>>;
+type TouchedMap = Partial<Record<ValidatedKey, boolean>>;
+
+// order matters — "scroll + focus the first error" walks this list top-down
+// so the user lands on the highest-on-the-page invalid field first.
+const FIELD_ORDER: ValidatedKey[] = [
+  "userAge",
+  "partnerAge",
+  "city",
+  "kidsWanted",
+  "startAge",
+  "income",
+  "partnerIncome",
+];
+
+const INPUT_IDS: Record<ValidatedKey, string> = {
+  userAge: "onboarding-userAge",
+  partnerAge: "onboarding-partnerAge",
+  city: "onboarding-city",
+  kidsWanted: "onboarding-kidsWanted",
+  startAge: "onboarding-startAge",
+  income: "onboarding-income",
+  partnerIncome: "onboarding-partnerIncome",
+};
+
+function validateForm(form: FormState): ErrorMap {
+  const errors: ErrorMap = {};
+  const hasPartner = form.partnerAge !== null;
+
+  // userAge — required, integer, in user-age range
+  if (form.userAge.trim() === "") {
+    errors.userAge = "required";
+  } else {
+    const n = Number(form.userAge);
+    if (!Number.isFinite(n)) errors.userAge = "must be a number";
+    else if (n < RANGES.userAge.min)
+      errors.userAge = `must be ${RANGES.userAge.min} or older`;
+    else if (n > RANGES.userAge.max)
+      errors.userAge = `must be ${RANGES.userAge.max} or younger`;
+  }
+
+  // partnerAge — only validated when partner is enabled
+  if (hasPartner) {
+    const n = form.partnerAge!;
+    if (!Number.isFinite(n)) errors.partnerAge = "must be a number";
+    else if (n < RANGES.partnerAge.min)
+      errors.partnerAge = `must be ${RANGES.partnerAge.min} or older`;
+    else if (n > RANGES.partnerAge.max)
+      errors.partnerAge = `must be ${RANGES.partnerAge.max} or younger`;
+  }
+
+  if (form.city.trim() === "") errors.city = "required";
+
+  if (form.kidsWanted.trim() === "") {
+    errors.kidsWanted = "required";
+  } else {
+    const n = Number(form.kidsWanted);
+    if (!Number.isFinite(n)) errors.kidsWanted = "must be a number";
+    else if (n < 0) errors.kidsWanted = "must be 0 or more";
+  }
+
+  if (form.startAge.trim() === "") {
+    errors.startAge = "required";
+  } else {
+    const n = Number(form.startAge);
+    if (!Number.isFinite(n)) errors.startAge = "must be a number";
+    else if (n < RANGES.startAge.min)
+      errors.startAge = `must be ${RANGES.startAge.min} or older`;
+    else if (n > RANGES.startAge.max)
+      errors.startAge = `must be ${RANGES.startAge.max} or younger`;
+  }
+
+  if (form.income.trim() === "") {
+    errors.income = "required";
+  } else {
+    const n = Number(form.income);
+    if (!Number.isFinite(n)) errors.income = "must be a number";
+    else if (n <= 0) errors.income = "must be greater than 0";
+  }
+
+  if (hasPartner) {
+    if (form.partnerIncome.trim() === "") {
+      errors.partnerIncome = "required";
+    } else {
+      const n = Number(form.partnerIncome);
+      if (!Number.isFinite(n)) errors.partnerIncome = "must be a number";
+      else if (n <= 0) errors.partnerIncome = "must be greater than 0";
+    }
+  }
+
+  return errors;
+}
+
 interface OnboardingModalProps {
   open: boolean;
   /** called when the user clicks "begin →" OR "skip — use demo values".
@@ -58,6 +162,11 @@ interface OnboardingModalProps {
 export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const applyInputs = useSimStore((s) => s.applyInputs);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [touched, setTouched] = useState<TouchedMap>({});
+  // submitAttempted forces all errors to surface on the first "begin →"
+  // click — without it, blank fields wouldn't have been blurred yet so
+  // the user wouldn't know what's missing.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   if (!open) return null;
 
@@ -65,18 +174,36 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  const hasPartner = form.partnerAge !== null;
+  function markTouched(key: ValidatedKey) {
+    setTouched((t) => ({ ...t, [key]: true }));
+  }
 
-  // canSubmit: 5 core fields filled AND (no partner OR partnerIncome filled).
-  // we don't validate the numeric content here — AtlasTextInput already
-  // enforces min/max + Number.isFinite on commit.
-  const canSubmit =
-    form.userAge.trim() !== "" &&
-    form.city.trim() !== "" &&
-    form.kidsWanted.trim() !== "" &&
-    form.startAge.trim() !== "" &&
-    form.income.trim() !== "" &&
-    (!hasPartner || form.partnerIncome.trim() !== "");
+  const hasPartner = form.partnerAge !== null;
+  const errors = validateForm(form);
+  const errorCount = Object.keys(errors).length;
+
+  function errorFor(key: ValidatedKey): string | undefined {
+    if (submitAttempted) return errors[key];
+    return touched[key] ? errors[key] : undefined;
+  }
+
+  // single toggle — flips partnerAge between null and a sensible default
+  // (userAge+1 if known, else 30). the partner sub-section reads
+  // form.partnerAge !== null so the conditional render and the button
+  // label always agree.
+  function togglePartner() {
+    setForm((prev) => {
+      if (prev.partnerAge !== null) {
+        return { ...prev, partnerAge: null };
+      }
+      const userN = Number(prev.userAge);
+      const seed =
+        Number.isFinite(userN) && userN > 0
+          ? Math.min(RANGES.partnerAge.max, Math.round(userN) + 1)
+          : 30;
+      return { ...prev, partnerAge: seed };
+    });
+  }
 
   function markOnboarded() {
     try {
@@ -92,7 +219,25 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   }
 
   function beginWithValues() {
-    if (!canSubmit) return;
+    setSubmitAttempted(true);
+
+    const currentErrors = validateForm(form);
+    if (Object.keys(currentErrors).length > 0) {
+      // find the first error by FIELD_ORDER, scroll to + focus it.
+      for (const key of FIELD_ORDER) {
+        if (currentErrors[key]) {
+          const el = document.getElementById(INPUT_IDS[key]);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            // focus on next tick so scrollIntoView's animation doesn't
+            // fight a focus-induced scroll.
+            window.setTimeout(() => el.focus(), 50);
+          }
+          break;
+        }
+      }
+      return;
+    }
 
     // build a Partial<SimInputs> from every non-empty field. applyInputs
     // merges with DEFAULT_INPUTS internally, so anything the user left
@@ -120,14 +265,16 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     if (Number.isFinite(startN)) next.startAge = Math.round(startN);
 
     const incomeN = Number(form.income);
-    if (Number.isFinite(incomeN)) next.householdIncome = Math.max(0, Math.round(incomeN));
+    if (Number.isFinite(incomeN))
+      next.householdIncome = Math.max(0, Math.round(incomeN));
 
     next.workIntensity = form.workIntensity;
     if (form.field.trim()) next.field = form.field.trim();
 
     if (hasPartner) {
       const piN = Number(form.partnerIncome);
-      if (Number.isFinite(piN)) next.partnerIncome = Math.max(0, Math.round(piN));
+      if (Number.isFinite(piN))
+        next.partnerIncome = Math.max(0, Math.round(piN));
       next.partnerWorkIntensity = form.partnerWorkIntensity;
       if (form.partnerField.trim()) next.partnerField = form.partnerField.trim();
     }
@@ -156,10 +303,13 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             label="YOUR AGE"
             value={form.userAge}
             onChange={(s) => update("userAge", s)}
+            onBlur={() => markTouched("userAge")}
             type="number"
             min={RANGES.userAge.min}
             max={RANGES.userAge.max}
             step={1}
+            inputId={INPUT_IDS.userAge}
+            error={errorFor("userAge")}
           />
 
           {hasPartner ? (
@@ -167,20 +317,20 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               label="PARTNER AGE"
               value={form.partnerAge ?? ""}
               onChange={(s) => {
-                if (s === "") {
-                  update("partnerAge", null);
-                  return;
-                }
+                if (s === "") return;
                 const n = Number(s);
                 if (Number.isFinite(n)) update("partnerAge", n);
               }}
+              onBlur={() => markTouched("partnerAge")}
               type="number"
               min={RANGES.partnerAge.min}
               max={RANGES.partnerAge.max}
+              inputId={INPUT_IDS.partnerAge}
+              error={errorFor("partnerAge")}
               rightSlot={
                 <button
                   type="button"
-                  onClick={() => update("partnerAge", null)}
+                  onClick={togglePartner}
                   className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
                 >
                   no partner →
@@ -197,10 +347,11 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               type="number"
               placeholder="single"
               disabled
+              inputId={INPUT_IDS.partnerAge}
               rightSlot={
                 <button
                   type="button"
-                  onClick={() => update("partnerAge", 30)}
+                  onClick={togglePartner}
                   className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
                 >
                   add partner →
@@ -213,8 +364,11 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             label="HOUSEHOLD CITY"
             value={form.city}
             onChange={(s) => update("city", s)}
+            onBlur={() => markTouched("city")}
             suggestions={CITY_SUGGESTIONS}
             placeholder="new york, ny"
+            inputId={INPUT_IDS.city}
+            error={errorFor("city")}
             panelFooter="any city worldwide — full data for the 20 us metros listed above, climate + country signals for everywhere else."
           />
 
@@ -222,29 +376,38 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             label="KIDS WANTED"
             value={form.kidsWanted}
             onChange={(s) => update("kidsWanted", s)}
+            onBlur={() => markTouched("kidsWanted")}
             type="number"
             min={0}
             step={1}
+            inputId={INPUT_IDS.kidsWanted}
+            error={errorFor("kidsWanted")}
           />
 
           <AtlasTextInput
             label="START AT AGE"
             value={form.startAge}
             onChange={(s) => update("startAge", s)}
+            onBlur={() => markTouched("startAge")}
             type="number"
             min={RANGES.startAge.min}
             max={RANGES.startAge.max}
             step={1}
+            inputId={INPUT_IDS.startAge}
+            error={errorFor("startAge")}
           />
 
           <AtlasTextInput
             label="HOUSEHOLD INCOME"
             value={form.income}
             onChange={(s) => update("income", s)}
+            onBlur={() => markTouched("income")}
             type="number"
             format="currency"
             min={0}
             step={1}
+            inputId={INPUT_IDS.income}
+            error={errorFor("income")}
           />
         </div>
 
@@ -258,10 +421,13 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                 label="PARTNER INCOME"
                 value={form.partnerIncome}
                 onChange={(s) => update("partnerIncome", s)}
+                onBlur={() => markTouched("partnerIncome")}
                 type="number"
                 format="currency"
                 min={0}
                 step={1}
+                inputId={INPUT_IDS.partnerIncome}
+                error={errorFor("partnerIncome")}
               />
               <AtlasDial
                 label="PARTNER WORK INTENSITY"
@@ -308,22 +474,28 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         </div>
 
         {/* ───── CTA row ───── */}
-        <div className="mt-12 flex items-center justify-between gap-6">
-          <button
-            type="button"
-            onClick={skipOnboarding}
-            className="font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-ink"
-          >
-            skip — use demo values →
-          </button>
-          <button
-            type="button"
-            onClick={beginWithValues}
-            disabled={!canSubmit}
-            className="rounded-[2px] bg-green px-10 py-3 font-serif text-[1.05rem] italic text-bone transition-colors hover:bg-green-2 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            begin →
-          </button>
+        <div className="mt-12 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-6">
+            <button
+              type="button"
+              onClick={skipOnboarding}
+              className="font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-ink"
+            >
+              skip — use demo values →
+            </button>
+            <button
+              type="button"
+              onClick={beginWithValues}
+              className="rounded-[2px] bg-green px-10 py-3 font-serif text-[1.05rem] italic text-bone transition-colors hover:bg-green-2"
+            >
+              begin →
+            </button>
+          </div>
+          {submitAttempted && errorCount > 0 ? (
+            <p className="self-end font-mono text-[0.7rem] italic text-terracotta">
+              {errorCount} field{errorCount === 1 ? "" : "s"} need attention
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

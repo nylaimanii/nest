@@ -21,12 +21,20 @@ export function HonestPanel() {
   const international = isInternational(snap.inputs.city);
 
   // childcare provenance tag: SOURCED (in atlas) → green; ESTIMATE → terracotta;
-  // INTERNATIONAL → muted (not a hard truth, just a scope note).
-  const childcareTag = international
-    ? { label: "INTERNATIONAL · V1", tone: "text-muted" }
-    : snap.childcareSourced
-      ? { label: `SOURCED · ${snap.inputs.city}`, tone: "text-green" }
-      : { label: "ESTIMATE · V1", tone: "text-terracotta" };
+  // INTERNATIONAL → muted (not a hard truth, just a scope note); NO DATA →
+  // muted (the city lookup failed and we deliberately surface that as null).
+  const childcareValueText =
+    snap.childcareMonthlyUsed === null
+      ? "—"
+      : `$${snap.childcareMonthlyUsed.toLocaleString("en-US")}`;
+  const childcareTag =
+    snap.childcareMonthlyUsed === null
+      ? { label: "NO DATA", tone: "text-muted" }
+      : international
+        ? { label: "INTERNATIONAL · V1", tone: "text-muted" }
+        : snap.childcareSourced
+          ? { label: `SOURCED · ${snap.inputs.city}`, tone: "text-green" }
+          : { label: "ESTIMATE · V1", tone: "text-terracotta" };
 
   const stabilityClass = STABILITY_CLASS[snap.incomeStability];
   const occTag = snap.occupationSourced
@@ -44,22 +52,31 @@ export function HonestPanel() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-8">
-      {/* who's doing what — committed-state summary above the metrics grid. */}
+      {/* who's doing what — committed-state summary above the metrics grid.
+          flex-wrap so the stability tag falls to a second line in narrow
+          containers (HonestPanel sits inside a responsive grid post-layout
+          rebuild and can be as narrow as ~340px on 13" viewports). */}
       <div className="flex flex-col gap-1.5 border-b border-line pb-4">
-        <div className="flex items-baseline gap-3 font-mono text-[0.75rem] text-muted">
-          <span className="w-[60px] uppercase tracking-[0.12em]">USER</span>
-          <span className="flex-1 text-ink">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[0.75rem] text-muted">
+          <span className="w-[60px] shrink-0 uppercase tracking-[0.12em]">
+            USER
+          </span>
+          <span className="min-w-0 flex-1 break-words text-ink">
             <span className="italic">{snap.occupationUsed}</span>
             <span> · {userIntensity}hr</span>
           </span>
-          <span className={cn("uppercase tracking-[0.12em]", stabilityClass)}>
+          <span
+            className={cn("shrink-0 uppercase tracking-[0.12em]", stabilityClass)}
+          >
             {snap.incomeStability}
           </span>
         </div>
         {snap.partnerOccupationUsed !== null ? (
-          <div className="flex items-baseline gap-3 font-mono text-[0.75rem] text-muted">
-            <span className="w-[60px] uppercase tracking-[0.12em]">PARTNER</span>
-            <span className="flex-1 text-ink">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[0.75rem] text-muted">
+            <span className="w-[60px] shrink-0 uppercase tracking-[0.12em]">
+              PARTNER
+            </span>
+            <span className="min-w-0 flex-1 break-words text-ink">
               <span className="italic">{snap.partnerOccupationUsed}</span>
               {partnerIntensity !== null ? (
                 <span> · {partnerIntensity}hr</span>
@@ -68,7 +85,7 @@ export function HonestPanel() {
             {snap.partnerIncomeStability ? (
               <span
                 className={cn(
-                  "uppercase tracking-[0.12em]",
+                  "shrink-0 uppercase tracking-[0.12em]",
                   partnerStabilityClass,
                 )}
               >
@@ -79,7 +96,7 @@ export function HonestPanel() {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
         <AtlasCard>
           <Stat label="STARTING NET (yr 1)" value={usd(snap.netCashByYear[0])} />
         </AtlasCard>
@@ -131,10 +148,7 @@ export function HonestPanel() {
           </div>
         </AtlasCard>
         <AtlasCard>
-          <Stat
-            label="CHILDCARE / MO"
-            value={`$${snap.childcareMonthlyUsed.toLocaleString("en-US")}`}
-          />
+          <Stat label="CHILDCARE / MO" value={childcareValueText} />
           <div className="mt-1">
             <span
               className={cn(

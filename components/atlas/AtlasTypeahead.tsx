@@ -15,6 +15,14 @@ export interface AtlasTypeaheadProps {
   className?: string;
   /** small mono hint rendered under the input (e.g. validation message). */
   hint?: string;
+  /** explicit id on the underlying input — used by callers that scroll
+   *  to and focus a specific field (onboarding validation). */
+  inputId?: string;
+  /** small mono italic terracotta line below the input when present.
+   *  takes precedence over `hint`. */
+  error?: string;
+  /** fires when the user moves focus away from the input. */
+  onBlur?: () => void;
   /** optional italic serif footer rendered INSIDE the suggestion panel,
    *  below the suggestions list. used to scope what the suggestions cover
    *  (e.g. "any city worldwide works — sourced data shown for US metros"). */
@@ -37,6 +45,9 @@ export function AtlasTypeahead({
   placeholder,
   className,
   hint,
+  inputId,
+  error,
+  onBlur,
   panelFooter,
 }: AtlasTypeaheadProps) {
   const [focused, setFocused] = useState(false);
@@ -90,6 +101,7 @@ export function AtlasTypeahead({
     <div className={cn("relative flex flex-col gap-1.5", className)}>
       <MonoLabel>{label}</MonoLabel>
       <input
+        id={inputId}
         type="text"
         value={value}
         onChange={(e) => {
@@ -104,6 +116,7 @@ export function AtlasTypeahead({
           }
         }}
         onBlur={() => {
+          onBlur?.();
           hideTimer.current = window.setTimeout(() => {
             setFocused(false);
             hideTimer.current = null;
@@ -112,10 +125,20 @@ export function AtlasTypeahead({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         aria-label={label}
+        aria-invalid={error ? "true" : undefined}
         autoComplete="off"
-        className="w-full rounded-[2px] border-b border-line bg-transparent py-2 font-mono text-[0.95rem] text-ink placeholder:italic placeholder:text-muted focus:border-green focus:outline-none focus:ring-1 focus:ring-green/30"
+        className={cn(
+          "w-full rounded-[2px] border-b bg-transparent py-2 font-mono text-[0.95rem] text-ink placeholder:italic placeholder:text-muted focus:outline-none focus:ring-1",
+          error
+            ? "border-terracotta focus:border-terracotta focus:ring-terracotta/30"
+            : "border-line focus:border-green focus:ring-green/30",
+        )}
       />
-      {hint ? (
+      {error ? (
+        <span className="font-mono text-[0.7rem] italic text-terracotta">
+          {error}
+        </span>
+      ) : hint ? (
         <span className="font-mono text-[0.7rem] text-muted">{hint}</span>
       ) : null}
       {showPanel ? (

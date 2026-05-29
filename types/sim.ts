@@ -55,8 +55,12 @@ export type SimSnapshot = {
   burdenRatio: number;
   /** true when the user's city is in the atlas dataset with real childcare data. */
   childcareSourced: boolean;
-  /** monthly per-kid childcare $ the model used (sourced or fallback estimate). */
-  childcareMonthlyUsed: number;
+  /** monthly per-kid childcare $ the model used (sourced or fallback estimate),
+   *  or null when the user's city isn't in our dataset at all. the cost-curve
+   *  math still runs against a placeholder internally so the simulation
+   *  doesn't crash, but the panel renders "—" / "NO DATA" instead of a
+   *  confident dollar value that would mislabel a different city's number. */
+  childcareMonthlyUsed: number | null;
   /** the resolved USER occupation label, or the user's raw input when no match. */
   occupationUsed: string;
   /** true when the user's field matched the BLS-sourced occupation set. */

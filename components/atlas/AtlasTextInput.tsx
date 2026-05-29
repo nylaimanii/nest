@@ -23,6 +23,18 @@ export interface AtlasTextInputProps {
   /** optional small affordance rendered next to the MonoLabel (e.g. "no partner →"). */
   rightSlot?: React.ReactNode;
   className?: string;
+  /** explicit id on the underlying input — used by callers that scroll
+   *  to and focus a specific field (onboarding validation). */
+  inputId?: string;
+  /** small mono italic terracotta line below the input when present.
+   *  used by the onboarding modal to surface validation errors. */
+  error?: string;
+  /** small mono italic muted line below the input. used for soft warnings
+   *  ("more than 10 kids — math runs but visualizations may compress"). */
+  hint?: string;
+  /** fires when the input loses focus — onboarding marks the field as
+   *  "touched" so per-field validation surfaces after the user moves on. */
+  onBlur?: () => void;
 }
 
 /**
@@ -44,6 +56,10 @@ export function AtlasTextInput({
   format,
   rightSlot,
   className,
+  inputId,
+  error,
+  hint,
+  onBlur,
 }: AtlasTextInputProps) {
   const [buffer, setBuffer] = useState(value === "" ? "" : String(value));
   const [focused, setFocused] = useState(false);
@@ -65,6 +81,7 @@ export function AtlasTextInput({
 
   function handleBlur() {
     setFocused(false);
+    onBlur?.();
     if (type !== "number" && !isCurrency) return;
     if (buffer === "" || buffer === "-") return;
     const n = Number(buffer);
@@ -96,6 +113,7 @@ export function AtlasTextInput({
         {rightSlot}
       </div>
       <input
+        id={inputId}
         type={effectiveType}
         inputMode={isCurrency ? "numeric" : undefined}
         value={displayValue}
@@ -108,8 +126,23 @@ export function AtlasTextInput({
         step={isCurrency ? undefined : step}
         disabled={disabled}
         aria-label={label}
-        className="w-full rounded-[2px] border-b border-line bg-transparent py-2 font-mono text-[0.95rem] text-ink placeholder:text-muted placeholder:italic focus:border-green focus:outline-none focus:ring-1 focus:ring-green/30 disabled:text-muted"
+        aria-invalid={error ? "true" : undefined}
+        className={cn(
+          "w-full rounded-[2px] border-b bg-transparent py-2 font-mono text-[0.95rem] text-ink placeholder:text-muted placeholder:italic focus:outline-none focus:ring-1 disabled:text-muted",
+          error
+            ? "border-terracotta focus:border-terracotta focus:ring-terracotta/30"
+            : "border-line focus:border-green focus:ring-green/30",
+        )}
       />
+      {error ? (
+        <span className="font-mono text-[0.7rem] italic text-terracotta">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="font-mono text-[0.7rem] italic text-muted">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
