@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 
-import { AtlasSlider } from "@/components/atlas/AtlasSlider";
+import { AtlasImportance } from "@/components/atlas/AtlasImportance";
 import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { CitySearch } from "@/components/atlas/CitySearch";
 import { cn } from "@/lib/utils";
@@ -91,23 +91,19 @@ export function RosterList() {
       </div>
 
       <div className="flex flex-col gap-5">
-        <MonoLabel>WEIGHTS</MonoLabel>
+        <MonoLabel>WHAT MATTERS TO YOU</MonoLabel>
         {WEIGHT_ROWS.map(({ key, label }) => (
-          <AtlasSlider
+          <AtlasImportance
             key={key}
             label={label}
             value={weights[key]}
-            min={0}
-            max={5}
-            step={1}
             onChange={(v) => setWeight(key, v)}
-            format={(v) => String(v)}
           />
         ))}
       </div>
 
       <p className="mt-auto font-serif text-[0.85rem] italic text-muted">
-        weights tune the score for what matters to you.
+        what matters to you tunes the match for each city.
       </p>
     </aside>
   );

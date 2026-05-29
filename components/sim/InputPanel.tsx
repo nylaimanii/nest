@@ -1,37 +1,53 @@
 "use client";
 
-import { AtlasSelect } from "@/components/atlas/AtlasSelect";
+import { useState } from "react";
+
 import { AtlasTextInput } from "@/components/atlas/AtlasTextInput";
+import { AtlasTypeahead } from "@/components/atlas/AtlasTypeahead";
 import { MonoLabel } from "@/components/atlas/MonoLabel";
+import { CITIES } from "@/lib/atlas/cities";
 import { RANGES } from "@/lib/sim/defaults";
 import { useSimStore } from "@/store/sim";
 import type { SimInputs } from "@/types";
 
-const CAREER_OPTIONS: ReadonlyArray<{
-  value: SimInputs["careerTrack"];
-  label: string;
-}> = [
-  { value: "steady", label: "steady" },
-  { value: "ascending", label: "ascending" },
-  { value: "demanding", label: "demanding" },
+const CITY_SUGGESTIONS: readonly string[] = CITIES.map((c) => c.name);
+
+const CAREER_OPTIONS: ReadonlyArray<SimInputs["careerTrack"]> = [
+  "steady",
+  "ascending",
+  "demanding",
 ];
 
-const FIELD_OPTIONS: ReadonlyArray<{
-  value: SimInputs["field"];
-  label: string;
-}> = [
-  { value: "tech", label: "tech" },
-  { value: "finance", label: "finance" },
-  { value: "biotech", label: "biotech" },
-  { value: "government", label: "government" },
-  { value: "manufacturing", label: "manufacturing" },
-  { value: "healthcare", label: "healthcare" },
-  { value: "creative", label: "creative" },
+const FIELD_OPTIONS: ReadonlyArray<SimInputs["field"]> = [
+  "tech",
+  "finance",
+  "biotech",
+  "government",
+  "manufacturing",
+  "healthcare",
+  "creative",
 ];
+
+function isCareerTrack(s: string): s is SimInputs["careerTrack"] {
+  return (CAREER_OPTIONS as readonly string[]).includes(s);
+}
+function isField(s: string): s is SimInputs["field"] {
+  return (FIELD_OPTIONS as readonly string[]).includes(s);
+}
 
 export function InputPanel() {
   const inputs = useSimStore((s) => s.inputs);
   const setInput = useSimStore((s) => s.setInput);
+
+  // local buffers for typeahead fields whose committed store value is a
+  // strict enum — we keep the raw typed string here and only write through
+  // when it matches a valid option. lets the user type "tec" and see
+  // suggestions without dropping the careerTrack/field state.
+  const [careerBuffer, setCareerBuffer] = useState<string>(inputs.careerTrack);
+  const [fieldBuffer, setFieldBuffer] = useState<string>(inputs.field);
+
+  const careerValid = isCareerTrack(careerBuffer);
+  const fieldValid = isField(fieldBuffer);
 
   // startAge can reach the lower of the model floor (24) and userAge so the
   // high-fertility band stays reachable from the slider.
@@ -86,6 +102,7 @@ export function InputPanel() {
             setInput("householdIncome", Math.max(0, Math.round(n)));
           }}
           type="number"
+          format="currency"
           min={0}
           step={1}
         />
@@ -160,26 +177,42 @@ export function InputPanel() {
           />
         )}
 
-        <AtlasTextInput
+        <AtlasTypeahead
           label="CITY"
           value={inputs.city}
           onChange={(s) => setInput("city", s)}
-          type="text"
+          suggestions={CITY_SUGGESTIONS}
           placeholder="new york, ny"
         />
 
-        <AtlasSelect
+        <AtlasTypeahead
           label="CAREER"
-          value={inputs.careerTrack}
-          onChange={(v) => setInput("careerTrack", v)}
-          options={CAREER_OPTIONS}
+          value={careerBuffer}
+          onChange={(s) => {
+            setCareerBuffer(s);
+            if (isCareerTrack(s)) setInput("careerTrack", s);
+          }}
+          suggestions={CAREER_OPTIONS}
+          hint={
+            careerValid || careerBuffer === ""
+              ? undefined
+              : `press one of: ${CAREER_OPTIONS.join(", ")}`
+          }
         />
 
-        <AtlasSelect
+        <AtlasTypeahead
           label="FIELD"
-          value={inputs.field}
-          onChange={(v) => setInput("field", v)}
-          options={FIELD_OPTIONS}
+          value={fieldBuffer}
+          onChange={(s) => {
+            setFieldBuffer(s);
+            if (isField(s)) setInput("field", s);
+          }}
+          suggestions={FIELD_OPTIONS}
+          hint={
+            fieldValid || fieldBuffer === ""
+              ? undefined
+              : `press one of: ${FIELD_OPTIONS.join(", ")}`
+          }
         />
       </div>
     </div>
