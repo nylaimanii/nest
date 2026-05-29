@@ -27,3 +27,11 @@ lowercase in nav + section headers. body sentence case. never preachy, never coe
 - no palette/font invention beyond what's listed here.
 - commit at the end of every step: `step N: <short summary>`.
 - if a step conflicts with this file, HALT and ask.
+- external api keys live in .env.local only, never committed.
+
+## external apis (read-only)
+- osm/nominatim: free, no key, used for geocoding + country resolution.
+- open-meteo: free, no key, used for climate (avgTempC, annualSunnyDays).
+- world-bank: free, no key, used for country-level: child mortality, life expectancy, school enrollment, homicide rate.
+- rest-countries: free, no key, used for country common name + region.
+- geodb (rapidapi): optional, free signup, used for metro population. endpoint degrades gracefully without it.
