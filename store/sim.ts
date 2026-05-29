@@ -12,15 +12,27 @@ import type { SimInputs, SimSnapshot } from "@/types";
 export type RevealStage = 0 | 1 | 2 | 3;
 
 interface SimState {
+  /** what the user is currently typing — never feeds the math directly. */
+  draftInputs: SimInputs;
+  /** the committed inputs the snapshot was computed against. */
   inputs: SimInputs;
-  /** the "wanted" path — what the user inputs maps directly to. */
+  /** the "wanted" path — computed from `inputs`, not draftInputs. */
   snapshot: SimSnapshot;
   /** the "drift" path — what happens without active planning. */
   driftSnapshot: SimSnapshot;
   /** numbers the RegretGap reveal is built from. */
   gap: GapSummary;
+  /** true when draftInputs differ from inputs (button glows). */
+  isDirty: boolean;
 
-  setInput: <K extends keyof SimInputs>(k: K, v: SimInputs[K]) => void;
+  /** updates draftInputs only; never recomputes the math. */
+  setDraftInput: <K extends keyof SimInputs>(k: K, v: SimInputs[K]) => void;
+  /** copies draftInputs → inputs and recomputes the snapshot/drift/gap. */
+  recompute: () => void;
+  /** atomically replaces BOTH draft + committed inputs and recomputes —
+   *  used for scenario load, /questions suggestions, reset. bypasses the
+   *  draft/commit flow so downstream consumers see the new state at once. */
+  applyInputs: (inputs: SimInputs) => void;
   reset: () => void;
 
   /** 0 = resting, 1 = gap, 2 = frictions, 3 = navigable path. */
@@ -28,31 +40,60 @@ interface SimState {
   setRevealStage: (s: RevealStage) => void;
 }
 
-// every input change recomputes both snapshots + the gap summary in one set,
-// so subscribers see one consistent update tick.
+function inputsEqual(a: SimInputs, b: SimInputs): boolean {
+  const keys = Object.keys(a) as (keyof SimInputs)[];
+  for (const k of keys) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+// the math now runs ONLY when the user explicitly hits RECOMPUTE (or on
+// scenario load / suggestion apply / reset, which use applyInputs). every
+// typed keystroke updates draftInputs in place and flips isDirty; the
+// snapshot stays frozen on the previously-committed inputs so charts +
+// honest panel never flicker mid-edit.
 export const useSimStore = create<SimState>((set) => ({
+  draftInputs: DEFAULT_INPUTS,
   inputs: DEFAULT_INPUTS,
   snapshot: runSim(DEFAULT_INPUTS),
   driftSnapshot: runDrift(DEFAULT_INPUTS),
   gap: gapSummary(DEFAULT_INPUTS),
+  isDirty: false,
 
-  setInput: (k, v) =>
+  setDraftInput: (k, v) =>
     set((state) => {
-      const inputs = { ...state.inputs, [k]: v };
-      return {
-        inputs,
-        snapshot: runSim(inputs),
-        driftSnapshot: runDrift(inputs),
-        gap: gapSummary(inputs),
-      };
+      const draftInputs = { ...state.draftInputs, [k]: v };
+      return { draftInputs, isDirty: !inputsEqual(draftInputs, state.inputs) };
+    }),
+
+  recompute: () =>
+    set((state) => ({
+      inputs: state.draftInputs,
+      snapshot: runSim(state.draftInputs),
+      driftSnapshot: runDrift(state.draftInputs),
+      gap: gapSummary(state.draftInputs),
+      isDirty: false,
+    })),
+
+  applyInputs: (next) =>
+    set({
+      draftInputs: next,
+      inputs: next,
+      snapshot: runSim(next),
+      driftSnapshot: runDrift(next),
+      gap: gapSummary(next),
+      isDirty: false,
     }),
 
   reset: () =>
     set({
+      draftInputs: DEFAULT_INPUTS,
       inputs: DEFAULT_INPUTS,
       snapshot: runSim(DEFAULT_INPUTS),
       driftSnapshot: runDrift(DEFAULT_INPUTS),
       gap: gapSummary(DEFAULT_INPUTS),
+      isDirty: false,
       revealStage: 0,
     }),
 

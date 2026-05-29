@@ -1,18 +1,24 @@
 import { MonoLabel } from "@/components/atlas";
 import { AtlasMap } from "@/components/atlas/AtlasMap";
 import { CityHonestPanel } from "@/components/atlas/CityHonestPanel";
+import { RecomputeButton } from "@/components/atlas/RecomputeButton";
 import { RosterList } from "@/components/atlas/RosterList";
 
 export default function AtlasViewPage() {
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-8 py-12">
-      <MonoLabel tone="muted">SECTION</MonoLabel>
-      <h1 className="font-serif text-[3rem] leading-none lowercase text-ink">
-        atlas
-      </h1>
-      <p className="font-serif italic text-muted">
-        the places, scored honestly — not just happily.
-      </p>
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-2">
+          <MonoLabel tone="muted">SECTION</MonoLabel>
+          <h1 className="font-serif text-[3rem] leading-none lowercase text-ink">
+            atlas
+          </h1>
+          <p className="font-serif italic text-muted">
+            the places, scored honestly — not just happily.
+          </p>
+        </div>
+        <RecomputeButton />
+      </div>
 
       <div className="grid grid-cols-[280px_minmax(640px,1fr)_420px] gap-0">
         <RosterList />

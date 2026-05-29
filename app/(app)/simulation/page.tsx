@@ -1,4 +1,5 @@
 import { MonoLabel } from "@/components/atlas";
+import { RecomputeButton } from "@/components/atlas/RecomputeButton";
 import { HonestPanel } from "@/components/sim/HonestPanel";
 import { InputPanel } from "@/components/sim/InputPanel";
 import { RegretGap } from "@/components/sim/RegretGap";
@@ -7,13 +8,18 @@ import { SimCanvas } from "@/components/sim/SimCanvas";
 export default function SimulationPage() {
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-8 py-12">
-      <MonoLabel tone="muted">SECTION</MonoLabel>
-      <h1 className="font-serif text-[3rem] leading-none lowercase text-ink">
-        simulation
-      </h1>
-      <p className="font-serif italic text-muted">
-        drag the years. watch the tradeoffs change.
-      </p>
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-2">
+          <MonoLabel tone="muted">SECTION</MonoLabel>
+          <h1 className="font-serif text-[3rem] leading-none lowercase text-ink">
+            simulation
+          </h1>
+          <p className="font-serif italic text-muted">
+            edit the inputs, then recompute to run the math.
+          </p>
+        </div>
+        <RecomputeButton />
+      </div>
 
       <RegretGap />
 

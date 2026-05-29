@@ -7,7 +7,8 @@ export type SimInputs = {
   userAge: number;
   /** 18–55 or null (single) */
   partnerAge: number | null;
-  /** annual gross, USD */
+  /** USER'S annual gross, USD. when a partner is present, their income is
+   *  tracked separately in partnerIncome and summed into the model. */
   householdIncome: number;
   /** free-string for now; map step replaces this */
   city: string;
@@ -15,12 +16,21 @@ export type SimInputs = {
   kidsWanted: number;
   /** 18–102, see RANGES.startAge for the slider window. */
   startAge: number;
-  /** work hours per week, 30–80. drives the income-growth curve. */
+  /** USER work hours per week, 30–80. drives the user's income-growth curve. */
   workIntensity: number;
-  /** occupation label — matched against lib/sim/fields.ts. free-string; any
-   *  value the user types is accepted, sourced fields look up salary +
+  /** USER occupation label — matched against lib/sim/fields.ts. free-string;
+   *  any value the user types is accepted, sourced fields look up salary +
    *  growth + volatility, others fall through to defaults. */
   field: string;
+
+  // ----- partner-side counterparts (null when no partner) ----- //
+
+  /** partner's annual gross USD, null when no partner. */
+  partnerIncome: number | null;
+  /** partner work hours per week (30–80), null when no partner. */
+  partnerWorkIntensity: number | null;
+  /** partner occupation label, null when no partner. */
+  partnerField: string | null;
 };
 
 export type SimSnapshot = {
@@ -47,10 +57,16 @@ export type SimSnapshot = {
   childcareSourced: boolean;
   /** monthly per-kid childcare $ the model used (sourced or fallback estimate). */
   childcareMonthlyUsed: number;
-  /** the resolved occupation label, or the user's raw input when no match. */
+  /** the resolved USER occupation label, or the user's raw input when no match. */
   occupationUsed: string;
   /** true when the user's field matched the BLS-sourced occupation set. */
   occupationSourced: boolean;
-  /** stability tier derived from the occupation's volatility. */
+  /** stability tier derived from the USER occupation's volatility. */
   incomeStability: "high" | "moderate" | "low";
+  /** partner's resolved occupation label, null when no partner. */
+  partnerOccupationUsed: string | null;
+  /** true when partner's field matched the BLS set; null when no partner. */
+  partnerOccupationSourced: boolean | null;
+  /** partner's stability tier derived from their occupation's volatility. */
+  partnerIncomeStability: "high" | "moderate" | "low" | null;
 };

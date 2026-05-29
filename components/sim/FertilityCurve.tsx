@@ -6,6 +6,7 @@ import {
   Label,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceDot,
   ReferenceLine,
   Tooltip,
@@ -27,10 +28,14 @@ import { ChartFrame, useChartFrame } from "./ChartFrame";
 
 type Row = { age: number; prob: number };
 
-// sample the same curve the model uses, across the supported age window.
+// sample the same curve the model uses across the broader window the input
+// now allows (18-102 clamps to anchor edges at 18 and 42 respectively).
+// 45-50 is rendered behind a faint terracotta band as the "outside reliable
+// range" zone — the curve is honest there (clamped to 20% from age 42 on),
+// but the user shouldn't read precision into it.
 function buildCurve(): Row[] {
   const out: Row[] = [];
-  for (let age = 24; age <= 42; age++) {
+  for (let age = 18; age <= 50; age++) {
     out.push({ age, prob: Math.round(fertilityAt(age) * 1000) / 10 });
   }
   return out;
@@ -59,9 +64,9 @@ function FertilityCurveBody() {
   const snap = useSimStore((s) => s.snapshot);
 
   // same projection the model uses. carrierAgeAtStart is the honest
-  // unclamped value (shown in the label); markerAge is clamped to the
-  // 24-42 anchor window so the dot pins to the curve edge for ages
-  // outside the medically meaningful range.
+  // unclamped value (shown in the label); the marker now sits at the
+  // visible-chart-clamped position [18, 50] — 18-50 covers most realistic
+  // planning ages, so the dot lands on the curve, not pinned to an edge.
   const carrierAgeAtStart = useMemo(() => {
     const carrierNow = Math.min(
       inputs.userAge,
@@ -69,14 +74,14 @@ function FertilityCurveBody() {
     );
     return carrierNow + (inputs.startAge - inputs.userAge);
   }, [inputs.userAge, inputs.partnerAge, inputs.startAge]);
-  const markerAge = clamp(carrierAgeAtStart, 24, 42);
+  const markerAge = clamp(carrierAgeAtStart, 18, 50);
   const markerPct = Math.round(snap.fertilityProbAtStart * 100);
 
   const data = useMemo(buildCurve, []);
 
   // near the right edge of the chart, sit the label to the left of the
   // dot so it doesn't clip; otherwise float it above.
-  const labelPosition: "top" | "left" = markerAge >= 39 ? "left" : "top";
+  const labelPosition: "top" | "left" = markerAge >= 46 ? "left" : "top";
 
   return (
     <LineChart
@@ -93,8 +98,8 @@ function FertilityCurveBody() {
       <XAxis
         dataKey="age"
         type="number"
-        domain={[24, 42]}
-        ticks={[24, 28, 32, 36, 40]}
+        domain={[18, 50]}
+        ticks={[20, 25, 30, 35, 40, 45, 50]}
         tick={AXIS_TICK}
         axisLine={AXIS_LINE}
         tickLine={false}
@@ -113,6 +118,20 @@ function FertilityCurveBody() {
       <Tooltip
         content={CurveTooltip}
         cursor={{ stroke: CHART.line, strokeDasharray: "2 4" }}
+      />
+
+      {/* "outside reliable range" band: 45-50 in faint terracotta. fertilityAt
+          clamps to 0.20 for ages ≥42, so values in this band are honestly the
+          floor of the curve — the band marks "treat with caution" without
+          changing the math. */}
+      <ReferenceArea
+        x1={45}
+        x2={50}
+        y1={0}
+        y2={100}
+        fill={CHART.terracotta}
+        fillOpacity={0.05}
+        stroke="none"
       />
 
       {/* the curve itself — ink, monotone, no dots. */}
@@ -168,7 +187,7 @@ export function FertilityCurve() {
   return (
     <ChartFrame
       label="FERTILITY BY START AGE"
-      caption="your chosen start age, marked on the curve. drag it."
+      caption="your chosen start age, marked on the curve. fertility data is reliable for ages 24–42; outside that, we report boundary values."
       height={240}
     >
       <FertilityCurveBody />

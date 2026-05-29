@@ -13,20 +13,29 @@ import { useSimStore } from "@/store/sim";
 
 const CITY_SUGGESTIONS: readonly string[] = CITIES.map((c) => c.name);
 
+// when "add partner →" is clicked we seed sensible defaults so the recompute
+// shows the two-earner shape immediately. these mirror DEFAULT_INPUTS so a
+// user toggling partner on/off lands somewhere realistic, not zeroed.
+const PARTNER_SEED = {
+  income: 80000,
+  workIntensity: 45,
+  field: "registered nurse",
+} as const;
+
 export function InputPanel() {
-  const inputs = useSimStore((s) => s.inputs);
-  const setInput = useSimStore((s) => s.setInput);
+  // read DRAFT inputs — what the user is typing, not what the math is
+  // currently running against. setDraftInput updates this only; clicking
+  // RECOMPUTE in the page header commits + runs the engine.
+  const draft = useSimStore((s) => s.draftInputs);
+  const setDraftInput = useSimStore((s) => s.setDraftInput);
 
   // local buffer for the field typeahead so the user can keep typing without
   // the store snapping to the partial string mid-keystroke. every keystroke
   // writes through; the buffer is used purely to drive the unsourced hint.
-  const [fieldBuffer, setFieldBuffer] = useState<string>(inputs.field);
+  const [fieldBuffer, setFieldBuffer] = useState<string>(draft.field);
   const [fieldUnsourced, setFieldUnsourced] = useState<boolean>(
-    inputs.field !== "" && findOccupation(inputs.field) === null,
+    draft.field !== "" && findOccupation(draft.field) === null,
   );
-
-  // brief debounce — avoids flashing "estimate · v1" while the user is
-  // mid-word (typing "softw" on the way to "software developer").
   useEffect(() => {
     const t = setTimeout(() => {
       setFieldUnsourced(
@@ -36,9 +45,54 @@ export function InputPanel() {
     return () => clearTimeout(t);
   }, [fieldBuffer]);
 
-  // startAge can reach the lower of the model floor (24) and userAge so the
+  // partner field buffer + unsourced hint, same pattern as the user side.
+  const partnerFieldValue = draft.partnerField ?? "";
+  const [partnerFieldBuffer, setPartnerFieldBuffer] = useState<string>(
+    partnerFieldValue,
+  );
+  const [partnerFieldUnsourced, setPartnerFieldUnsourced] = useState<boolean>(
+    partnerFieldValue !== "" && findOccupation(partnerFieldValue) === null,
+  );
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPartnerFieldUnsourced(
+        partnerFieldBuffer !== "" &&
+          findOccupation(partnerFieldBuffer) === null,
+      );
+    }, 400);
+    return () => clearTimeout(t);
+  }, [partnerFieldBuffer]);
+
+  // when the draft.partnerField changes via outside paths (scenario load
+  // etc), keep the local buffer in sync.
+  useEffect(() => {
+    setPartnerFieldBuffer(draft.partnerField ?? "");
+  }, [draft.partnerField]);
+
+  // startAge can reach the lower of the model floor and userAge so the
   // high-fertility band stays reachable from the slider.
-  const startAgeMin = Math.min(RANGES.startAge.min, inputs.userAge);
+  const startAgeMin = Math.min(RANGES.startAge.min, draft.userAge);
+
+  const hasPartner = draft.partnerAge !== null;
+
+  function addPartner() {
+    // partner age + the three job fields all light up together. recompute
+    // is still required for the math to update.
+    setDraftInput(
+      "partnerAge",
+      Math.min(RANGES.partnerAge.max, draft.userAge + 1),
+    );
+    setDraftInput("partnerIncome", PARTNER_SEED.income);
+    setDraftInput("partnerWorkIntensity", PARTNER_SEED.workIntensity);
+    setDraftInput("partnerField", PARTNER_SEED.field);
+  }
+
+  function removePartner() {
+    setDraftInput("partnerAge", null);
+    setDraftInput("partnerIncome", null);
+    setDraftInput("partnerWorkIntensity", null);
+    setDraftInput("partnerField", null);
+  }
 
   return (
     <div className="flex max-w-[360px] flex-col gap-10 border-r border-line p-8">
@@ -48,14 +102,12 @@ export function InputPanel() {
 
         <AtlasTextInput
           label="KIDS WANTED"
-          value={inputs.kidsWanted}
+          value={draft.kidsWanted}
           onChange={(s) => {
             if (s === "" || s === "-") return;
             const n = Number(s);
             if (!Number.isFinite(n)) return;
-            // floor + clamp >=0 so non-integers settle to a clean int and
-            // negatives can't sneak through mid-typing. no upper cap.
-            setInput("kidsWanted", Math.max(0, Math.floor(n)));
+            setDraftInput("kidsWanted", Math.max(0, Math.floor(n)));
           }}
           type="number"
           min={0}
@@ -64,12 +116,12 @@ export function InputPanel() {
 
         <AtlasTextInput
           label="START AT AGE"
-          value={inputs.startAge}
+          value={draft.startAge}
           onChange={(s) => {
             if (s === "" || s === "-") return;
             const n = Number(s);
             if (!Number.isFinite(n)) return;
-            setInput("startAge", Math.round(n));
+            setDraftInput("startAge", Math.round(n));
           }}
           type="number"
           min={startAgeMin}
@@ -78,15 +130,13 @@ export function InputPanel() {
         />
 
         <AtlasTextInput
-          label="HOUSEHOLD INCOME"
-          value={inputs.householdIncome}
+          label="USER INCOME"
+          value={draft.householdIncome}
           onChange={(s) => {
             if (s === "" || s === "-") return;
             const n = Number(s);
             if (!Number.isFinite(n)) return;
-            // accept any positive integer; no upper cap so users can model
-            // their real income, not a slider-bound proxy.
-            setInput("householdIncome", Math.max(0, Math.round(n)));
+            setDraftInput("householdIncome", Math.max(0, Math.round(n)));
           }}
           type="number"
           format="currency"
@@ -101,18 +151,70 @@ export function InputPanel() {
 
         <AtlasTextInput
           label="USER AGE"
-          value={inputs.userAge}
+          value={draft.userAge}
           onChange={(s) => {
             if (s === "") return;
             const n = Number(s);
-            if (Number.isFinite(n)) setInput("userAge", n);
+            if (Number.isFinite(n)) setDraftInput("userAge", n);
           }}
           type="number"
           min={RANGES.userAge.min}
           max={RANGES.userAge.max}
         />
 
-        {inputs.partnerAge === null ? (
+        <AtlasDial
+          label="USER WORK INTENSITY"
+          value={draft.workIntensity}
+          onChange={(v) => setDraftInput("workIntensity", v)}
+          min={RANGES.workIntensity.min}
+          max={RANGES.workIntensity.max}
+          step={RANGES.workIntensity.step}
+          format={(v) => `${v} hrs/week`}
+          leftAnchor="STEADY"
+          rightAnchor="INTENSE"
+        />
+
+        <AtlasTypeahead
+          label="USER FIELD"
+          value={fieldBuffer}
+          onChange={(s) => {
+            setFieldBuffer(s);
+            setDraftInput("field", s);
+          }}
+          suggestions={OCCUPATION_LABELS}
+          hint={
+            fieldUnsourced
+              ? "estimate · v1 — using defaults for income growth and stability."
+              : undefined
+          }
+        />
+
+        {hasPartner ? (
+          <AtlasTextInput
+            label="PARTNER AGE"
+            value={draft.partnerAge ?? ""}
+            onChange={(s) => {
+              if (s === "") {
+                removePartner();
+                return;
+              }
+              const n = Number(s);
+              if (Number.isFinite(n)) setDraftInput("partnerAge", n);
+            }}
+            type="number"
+            min={RANGES.partnerAge.min}
+            max={RANGES.partnerAge.max}
+            rightSlot={
+              <button
+                type="button"
+                onClick={removePartner}
+                className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
+              >
+                no partner →
+              </button>
+            }
+          />
+        ) : (
           <AtlasTextInput
             label="PARTNER AGE"
             value=""
@@ -125,79 +227,70 @@ export function InputPanel() {
             rightSlot={
               <button
                 type="button"
-                onClick={() =>
-                  setInput(
-                    "partnerAge",
-                    Math.min(RANGES.partnerAge.max, inputs.userAge + 1),
-                  )
-                }
+                onClick={addPartner}
                 className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
               >
                 add partner →
               </button>
             }
           />
-        ) : (
-          <AtlasTextInput
-            label="PARTNER AGE"
-            value={inputs.partnerAge}
-            onChange={(s) => {
-              if (s === "") {
-                setInput("partnerAge", null);
-                return;
-              }
-              const n = Number(s);
-              if (Number.isFinite(n)) setInput("partnerAge", n);
-            }}
-            type="number"
-            min={RANGES.partnerAge.min}
-            max={RANGES.partnerAge.max}
-            rightSlot={
-              <button
-                type="button"
-                onClick={() => setInput("partnerAge", null)}
-                className="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
-              >
-                no partner →
-              </button>
-            }
-          />
         )}
 
+        {hasPartner ? (
+          <>
+            <AtlasTextInput
+              label="PARTNER INCOME"
+              value={draft.partnerIncome ?? 0}
+              onChange={(s) => {
+                if (s === "" || s === "-") return;
+                const n = Number(s);
+                if (!Number.isFinite(n)) return;
+                setDraftInput("partnerIncome", Math.max(0, Math.round(n)));
+              }}
+              type="number"
+              format="currency"
+              min={0}
+              step={1}
+            />
+
+            <AtlasDial
+              label="PARTNER WORK INTENSITY"
+              value={
+                draft.partnerWorkIntensity ?? PARTNER_SEED.workIntensity
+              }
+              onChange={(v) => setDraftInput("partnerWorkIntensity", v)}
+              min={RANGES.workIntensity.min}
+              max={RANGES.workIntensity.max}
+              step={RANGES.workIntensity.step}
+              format={(v) => `${v} hrs/week`}
+              leftAnchor="STEADY"
+              rightAnchor="INTENSE"
+            />
+
+            <AtlasTypeahead
+              label="PARTNER FIELD"
+              value={partnerFieldBuffer}
+              onChange={(s) => {
+                setPartnerFieldBuffer(s);
+                setDraftInput("partnerField", s);
+              }}
+              suggestions={OCCUPATION_LABELS}
+              hint={
+                partnerFieldUnsourced
+                  ? "estimate · v1 — using defaults for income growth and stability."
+                  : undefined
+              }
+            />
+          </>
+        ) : null}
+
         <AtlasTypeahead
-          label="CITY"
-          value={inputs.city}
-          onChange={(s) => setInput("city", s)}
+          label="HOUSEHOLD CITY"
+          value={draft.city}
+          onChange={(s) => setDraftInput("city", s)}
           suggestions={CITY_SUGGESTIONS}
           placeholder="new york, ny"
           panelFooter="any city worldwide works — sourced data shown for US metros above."
-        />
-
-        <AtlasDial
-          label="WORK INTENSITY"
-          value={inputs.workIntensity}
-          onChange={(v) => setInput("workIntensity", v)}
-          min={RANGES.workIntensity.min}
-          max={RANGES.workIntensity.max}
-          step={RANGES.workIntensity.step}
-          format={(v) => `${v} hrs/week`}
-          leftAnchor="STEADY"
-          rightAnchor="INTENSE"
-        />
-
-        <AtlasTypeahead
-          label="FIELD"
-          value={fieldBuffer}
-          onChange={(s) => {
-            setFieldBuffer(s);
-            setInput("field", s);
-          }}
-          suggestions={OCCUPATION_LABELS}
-          hint={
-            fieldUnsourced
-              ? "estimate · v1 — using defaults for income growth and stability."
-              : undefined
-          }
         />
       </div>
     </div>

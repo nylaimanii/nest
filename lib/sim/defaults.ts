@@ -7,6 +7,7 @@ import type { SimInputs } from "@/types";
 export const DEFAULT_INPUTS: SimInputs = {
   userAge: 31,
   partnerAge: 32,
+  // user's income only — partner is tracked separately below.
   householdIncome: 120000,
   city: "new york, ny",
   kidsWanted: 3,
@@ -18,6 +19,11 @@ export const DEFAULT_INPUTS: SimInputs = {
   // matches the previous "tech" default; resolves to a sourced occupation
   // so the HonestPanel SOURCED · BLS tag lights up on first paint.
   field: "software developer",
+  // representative two-earner household: steadier second income, healthcare
+  // — common pairing in the early-thirties demographic this default targets.
+  partnerIncome: 80000,
+  partnerWorkIntensity: 45,
+  partnerField: "registered nurse",
 };
 
 export const RANGES = {

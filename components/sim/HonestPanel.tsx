@@ -33,8 +33,52 @@ export function HonestPanel() {
     ? { label: "SOURCED · BLS", tone: "text-green" }
     : { label: "ESTIMATE · V1", tone: "text-terracotta" };
 
+  // small earner-summary rows — read partner fields off the snapshot so they
+  // reflect the COMMITTED inputs, not whatever draft the user is currently
+  // editing. when no partner, only the USER row renders.
+  const userIntensity = snap.inputs.workIntensity;
+  const partnerIntensity = snap.inputs.partnerWorkIntensity;
+  const partnerStabilityClass = snap.partnerIncomeStability
+    ? STABILITY_CLASS[snap.partnerIncomeStability]
+    : "text-muted";
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-8">
+      {/* who's doing what — committed-state summary above the metrics grid. */}
+      <div className="flex flex-col gap-1.5 border-b border-line pb-4">
+        <div className="flex items-baseline gap-3 font-mono text-[0.75rem] text-muted">
+          <span className="w-[60px] uppercase tracking-[0.12em]">USER</span>
+          <span className="flex-1 text-ink">
+            <span className="italic">{snap.occupationUsed}</span>
+            <span> · {userIntensity}hr</span>
+          </span>
+          <span className={cn("uppercase tracking-[0.12em]", stabilityClass)}>
+            {snap.incomeStability}
+          </span>
+        </div>
+        {snap.partnerOccupationUsed !== null ? (
+          <div className="flex items-baseline gap-3 font-mono text-[0.75rem] text-muted">
+            <span className="w-[60px] uppercase tracking-[0.12em]">PARTNER</span>
+            <span className="flex-1 text-ink">
+              <span className="italic">{snap.partnerOccupationUsed}</span>
+              {partnerIntensity !== null ? (
+                <span> · {partnerIntensity}hr</span>
+              ) : null}
+            </span>
+            {snap.partnerIncomeStability ? (
+              <span
+                className={cn(
+                  "uppercase tracking-[0.12em]",
+                  partnerStabilityClass,
+                )}
+              >
+                {snap.partnerIncomeStability}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <AtlasCard>
           <Stat label="STARTING NET (yr 1)" value={usd(snap.netCashByYear[0])} />

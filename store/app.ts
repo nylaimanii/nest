@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import { DEFAULT_INPUTS } from "@/lib/sim/defaults";
 import { useSimStore } from "@/store/sim";
-import type { Scenario, Section, SimInputs } from "@/types";
+import type { Scenario, Section } from "@/types";
 
 interface AppState {
   section: Section;
@@ -55,15 +55,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   applyScenario: (id) => {
     const scenario = get().scenarios.find((s) => s.id === id);
     if (!scenario) return;
-    const setInput = useSimStore.getState().setInput;
-    // loop over each input key and replay it through setInput. runSim re-runs
-    // on every key but the model is cheap (10 iterations); the sim store ends
-    // up with a snapshot built from the scenario's saved inputs.
-    (Object.keys(scenario.inputs) as (keyof SimInputs)[]).forEach((k) => {
-      // generic narrowing can't be done from a dynamic loop; cast through any.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setInput(k as any, scenario.inputs[k] as any);
-    });
+    // atomic apply — sets draft + committed inputs together and recomputes
+    // the snapshot in one go, so scenario load doesn't leave a dirty draft.
+    useSimStore.getState().applyInputs(scenario.inputs);
   },
 
   renameScenario: (id, label) =>

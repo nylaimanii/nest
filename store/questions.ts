@@ -160,14 +160,18 @@ export const useQuestionsStore = create<QuestionsState>((set, get) => ({
   },
 
   applySuggestions: () => {
-    // snapshot the array first, then iterate EVERY entry — re-read setInput
-    // from the live sim store on each iteration so a stale action ref can't
-    // skip a field (kidsWanted vs workIntensity vs startAge all need to land).
+    // merge every suggestion onto the currently-committed inputs then apply
+    // in one atomic step — bypasses the draft/commit flow so the user
+    // doesn't have to also click RECOMPUTE after accepting suggestions.
     const suggestions = get().suggestions;
+    if (suggestions.length === 0) return;
+    const sim = useSimStore.getState();
+    const merged = { ...sim.inputs };
     for (const s of suggestions) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      useSimStore.getState().setInput(s.field as any, s.to as any);
+      (merged as any)[s.field] = s.to;
     }
+    sim.applyInputs(merged);
   },
 
   reset: () =>

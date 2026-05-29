@@ -149,25 +149,44 @@ export function runSim(inputs: SimInputs): SimSnapshot {
 
   let running = 0;
 
-  // resolve occupation — null fall-through means the user typed something
-  // not in our BLS-sourced set, so we use the default shape but report
-  // occupationSourced=false to the UI.
+  // resolve USER occupation — null fall-through means the user typed
+  // something not in our BLS-sourced set, so we use the default shape but
+  // report occupationSourced=false to the UI.
   const occMatch: Occupation | null = findOccupation(inputs.field);
   const occ = occMatch ?? DEFAULT_OCCUPATION;
   const occupationSourced = occMatch !== null;
   const occupationUsed = occMatch ? occMatch.label : inputs.field;
 
+  // resolve PARTNER occupation — only meaningful when a partner is present.
+  // partner growth uses the same shape so two-earner households compound
+  // independently, then we sum gross at each year.
+  const hasPartner = inputs.partnerAge != null;
+  const partnerOccMatch: Occupation | null =
+    hasPartner && inputs.partnerField
+      ? findOccupation(inputs.partnerField)
+      : null;
+  const partnerOcc = partnerOccMatch ?? DEFAULT_OCCUPATION;
+  const partnerOccupationSourced = hasPartner ? partnerOccMatch !== null : null;
+  const partnerOccupationUsed = hasPartner
+    ? (partnerOccMatch ? partnerOccMatch.label : (inputs.partnerField ?? ""))
+    : null;
+
   // BLS growth figures are 10-year cumulative, so divide by 10 to get an
   // annual contribution layered on top of the intensity-driven rate.
   const annualGrowth =
     yearGrowthRate(inputs.workIntensity) + occ.projectedGrowth / 10;
+  const partnerAnnualGrowth = hasPartner
+    ? yearGrowthRate(inputs.partnerWorkIntensity ?? 0) +
+      partnerOcc.projectedGrowth / 10
+    : 0;
   const timePenalty = timePenaltyMultiplier(inputs.workIntensity);
 
-  const filing: FilingStatus =
-    inputs.partnerAge != null ? "married_jointly" : "single";
+  const filing: FilingStatus = hasPartner ? "married_jointly" : "single";
   const state = stateAbbrevFromCity(inputs.city);
   const { curve: kidCostCurve, sourced: childcareSourced, childcareMonthlyUsed } =
     kidCostCurveFor(inputs.city);
+
+  const partnerBase = hasPartner ? inputs.partnerIncome ?? 0 : 0;
 
   for (let i = 0; i < HORIZON; i++) {
     let yearKidCost = 0;
@@ -181,7 +200,9 @@ export function runSim(inputs: SimInputs): SimSnapshot {
       }
       if (kidAge >= 0 && kidAge <= 17) kidsAlive += 1;
     }
-    const gross = inputs.householdIncome * Math.pow(1 + annualGrowth, i);
+    const userGross = inputs.householdIncome * Math.pow(1 + annualGrowth, i);
+    const partnerGross = partnerBase * Math.pow(1 + partnerAnnualGrowth, i);
+    const gross = userGross + partnerGross;
     const tax = computeTakeHome(gross, kidsAlive, filing, state);
     const takeHome = tax.takeHome;
     const net = round100(takeHome - yearKidCost);
@@ -206,14 +227,20 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     clamp(fertilityAt(carrierAgeAtStart), 0.2, 0.94),
   );
 
+  // combined base for opportunity-cost + benefits-threshold math. for a
+  // single-mode user this is just householdIncome; for two-earner it's the
+  // sum of both at year 0 (pre-growth), matching how the rest of the engine
+  // treats partner contribution.
+  const baseTotalIncome = inputs.householdIncome + partnerBase;
+
   // negative number vs. no-kids baseline.
   const lifetimeEarningsDelta = -round100(
-    0.07 * inputs.householdIncome * 10 * inputs.kidsWanted,
+    0.07 * baseTotalIncome * 10 * inputs.kidsWanted,
   );
 
   const benefitsCapturable = round100(
     2000 * inputs.kidsWanted +
-      (inputs.householdIncome < 150000 ? 6000 : 3000),
+      (baseTotalIncome < 150000 ? 6000 : 3000),
   );
 
   // peak burden ratio across the 10-year window — time penalty inflates
@@ -243,5 +270,10 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     occupationUsed,
     occupationSourced,
     incomeStability: incomeStabilityFor(occ.volatility),
+    partnerOccupationUsed,
+    partnerOccupationSourced,
+    partnerIncomeStability: hasPartner
+      ? incomeStabilityFor(partnerOcc.volatility)
+      : null,
   }) as SimSnapshot;
 }
