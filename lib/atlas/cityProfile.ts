@@ -47,3 +47,46 @@ export interface CityProfile {
 export interface CityProfileError {
   error: string;
 }
+
+// ---- record builder --------------------------------------------------------
+// turns the CityProfile API shape into a CityRecord the atlas engine can
+// score against. country-level signals (schoolEnrollment, safetyProxy)
+// map into the city-level score slots with honest provenance tags so the
+// vision panel can label them "COUNTRY EST" rather than misrepresenting
+// them as city-specific.
+
+import type { CityRecord, Confidence } from "./cities";
+import { cityIdFromName } from "./cities";
+
+function clampPct(n: number | null): number | null {
+  if (n === null) return null;
+  if (n < 0) return 0;
+  if (n > 100) return 100;
+  return n;
+}
+
+export function cityRecordFromProfile(profile: CityProfile): CityRecord {
+  const confidence: Confidence = profile.isUS ? "partial-us" : "partial-global";
+  return {
+    id: cityIdFromName(profile.name),
+    name: profile.name,
+    lat: profile.lat,
+    lng: profile.lng,
+    costOfLiving: profile.costOfLiving,
+    medianRent2BR: null,
+    // country-level proxy via World Bank — clamped to 0-100 since secondary
+    // enrollment can exceed 100% in some countries (repeat students etc).
+    schoolScore: clampPct(profile.schoolEnrollment),
+    // safetyProxy is already in 0-100 from the route (100 - homicide*5 clamped).
+    safetyScore: profile.safetyProxy,
+    greenSpacePct: null,
+    childcareMonthly: null,
+    takeHomeAfterChildcarePct: null,
+    careerHubFor: [],
+    metroPopulation: profile.metroPopulation,
+    annualSunnyDays: profile.annualSunnyDays,
+    confidence,
+    country: profile.country || null,
+    sources: profile.sources,
+  };
+}

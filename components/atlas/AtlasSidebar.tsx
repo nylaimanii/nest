@@ -43,8 +43,25 @@ function SubHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** sidebar provenance subtitle. "full" records suppress the label
+ *  entirely so the curated-US-metro path stays clean. */
+function targetProvenanceLabel(target: ReturnType<typeof useAtlasStore.getState>["target"]): string | null {
+  if (!target) return null;
+  const confidence = target.confidence ?? "full";
+  if (confidence === "full") return null;
+  if (confidence === "partial-us") return "US CITY · LIMITED DATA";
+  if (confidence === "partial-global") {
+    const country = (target.country ?? "").trim();
+    return country
+      ? `${country.toUpperCase()} · GLOBAL DATA`
+      : "GLOBAL CITY · LIMITED DATA";
+  }
+  return null;
+}
+
 export function AtlasSidebar() {
   const target = useAtlasStore((s) => s.target);
+  const isResolvingTarget = useAtlasStore((s) => s.isResolvingTarget);
   const alternates = useAtlasStore((s) => s.alternates);
   const weights = useAtlasStore((s) => s.weights);
   const draftWeights = useAtlasStore((s) => s.draftWeights);
@@ -52,6 +69,7 @@ export function AtlasSidebar() {
   const selectedAlternateId = useAtlasStore((s) => s.selectedAlternateId);
   const setSelectedAlternateId = useAtlasStore((s) => s.setSelectedAlternateId);
   const simInputs = useSimStore((s) => s.inputs);
+  const requestedCity = simInputs.city;
 
   const hasPartner = simInputs.partnerAge !== null;
   const youRows = hasPartner ? [...YOU_ROWS, PARTNER_CAREER_ROW] : YOU_ROWS;
@@ -62,11 +80,18 @@ export function AtlasSidebar() {
   const targetScore = target ? scoreCity(target, ctx) : null;
   const altScored = alternates.map((c) => ({ city: c, score: scoreCity(c, ctx) }));
 
+  const provenanceLabel = targetProvenanceLabel(target);
+
   return (
     <aside className="flex max-h-[calc(100vh-200px)] w-[280px] flex-col gap-6 overflow-y-auto border-r border-line p-6">
       {/* ───────────── target ───────────── */}
       <div className="flex flex-col gap-2">
         <MonoLabel>YOUR TARGET CITY</MonoLabel>
+        {isResolvingTarget ? (
+          <span className="font-serif italic text-muted">
+            resolving {requestedCity}…
+          </span>
+        ) : null}
         {target ? (
           <div className="flex items-baseline justify-between gap-3">
             <span className="font-serif text-[1.1rem] lowercase italic text-ink">
@@ -78,11 +103,16 @@ export function AtlasSidebar() {
               </span>
             ) : null}
           </div>
-        ) : (
-          <span className="font-serif italic text-muted">
-            no target yet — set a city on simulation.
+        ) : !isResolvingTarget ? (
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.12em] text-muted">
+            city not found — pick another on /simulation
           </span>
-        )}
+        ) : null}
+        {provenanceLabel && !isResolvingTarget ? (
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.15em] text-muted">
+            {provenanceLabel}
+          </span>
+        ) : null}
         <Link
           href="/simulation"
           className="font-mono text-[0.65rem] uppercase tracking-[0.12em] text-muted transition-colors hover:text-ink"
@@ -148,6 +178,9 @@ export function AtlasSidebar() {
             })}
           </ul>
         )}
+        <p className="mt-1 font-serif text-[0.75rem] italic text-muted">
+          alternates are sourced from 20 us metros. global expansion is v3.
+        </p>
       </div>
 
       <div className="h-px bg-line" />

@@ -3,11 +3,13 @@ import { create } from "zustand";
 import {
   CITIES,
   findCityByName,
-  makePartialCity,
   type CityRecord,
 } from "@/lib/atlas/cities";
 import { findAlternates } from "@/lib/atlas/alternates";
-import { geocodeCity } from "@/lib/atlas/geocode";
+import {
+  cityRecordFromProfile,
+  type CityProfile,
+} from "@/lib/atlas/cityProfile";
 import {
   scoreCity,
   type AtlasWeights,
@@ -15,34 +17,24 @@ import {
   type ScoreContext,
 } from "@/lib/atlas/score";
 import type { FilingStatus } from "@/lib/sim/tax";
-// atlas alternates depend on the committed sim inputs (income, field,
-// partnerField, partnerAge, partnerIncome, kidsWanted) — same context the
-// score engine takes.
 import { useSimStore } from "@/store/sim";
 import type { SimInputs } from "@/types";
 
 interface AtlasState {
-  /** committed weights — what alternates/scores are computed against. */
   weights: AtlasWeights;
-  /** what the sidebar UI is currently tuning — never feeds scores. */
   draftWeights: AtlasWeights;
   isWeightsDirty: boolean;
   setDraftWeight: <K extends keyof AtlasWeights>(k: K, v: number) => void;
-  /** commits draftWeights, recomputes alternates against current target +
-   *  sim inputs. clears selectedAlternateId if the selected isn't in the
-   *  new list. */
   recompute: () => void;
 
-  /** the city the user pinned as their target via /simulation. resolves
-   *  from sim.inputs.city via findCityByName first, then /api/geocode for
-   *  partial-data records. null only if both fail. */
   target: CityRecord | null;
+  /** true while the cityProfile fetch is in flight. previous target stays
+   *  visible so the sidebar shows a graceful "resolving …" rather than a
+   *  blank flash. */
+  isResolvingTarget: boolean;
 
-  /** computed alternates from the 20-city pool — ranked highest first. */
   alternates: CityRecord[];
 
-  /** which alternate the user is currently viewing in the right panel
-   *  (null = viewing target). */
   selectedAlternateId: string | null;
   setSelectedAlternateId: (id: string | null) => void;
 }
@@ -79,8 +71,6 @@ export function contextFrom(
   };
 }
 
-/** target.id-aware score lookup — used by sidebar + right panel to pull
- *  the target's CityScore without re-scoring redundantly. */
 export function scoreFor(
   city: CityRecord,
   inputs: SimInputs,
@@ -97,17 +87,6 @@ function weightsEqual(a: AtlasWeights, b: AtlasWeights): boolean {
   return true;
 }
 
-// resolve sim.inputs.city → CityRecord. local dataset hit wins; otherwise
-// hit /api/geocode for a partial-data record so the map still pins
-// SOMEWHERE for "tokyo, japan"-style international targets.
-async function resolveTarget(cityQuery: string): Promise<CityRecord | null> {
-  const local = findCityByName(cityQuery);
-  if (local) return local;
-  const geo = await geocodeCity(cityQuery);
-  if (!geo) return null;
-  return makePartialCity(geo.name, geo.lat, geo.lng);
-}
-
 function computeAlternates(
   target: CityRecord | null,
   weights: AtlasWeights,
@@ -117,10 +96,71 @@ function computeAlternates(
   return findAlternates(target, CITIES, contextFrom(inputs, weights));
 }
 
-// ---- initial state ---------------------------------------------------------
-// for the seed render we synchronously resolve "new york, ny" via the local
-// dataset (guaranteed hit) and compute alternates immediately. async path
-// only fires when the user later picks a non-dataset city on /simulation.
+// ---- target resolution ----------------------------------------------------
+// races the user-supplied city against the local dataset first (synchronous,
+// no network), then falls through to /api/cityProfile for global cities. a
+// monotonic sequence guards against the slow-then-fast race where two
+// recomputes land in different orders.
+
+let resolveSeq = 0;
+
+async function fetchCityProfile(q: string): Promise<CityProfile | null> {
+  try {
+    const res = await fetch(`/api/cityProfile?q=${encodeURIComponent(q)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return (await res.json()) as CityProfile;
+  } catch {
+    return null;
+  }
+}
+
+async function kickoffResolveTarget(city: string, inputs: SimInputs) {
+  const seq = ++resolveSeq;
+
+  const local = findCityByName(city);
+  if (local) {
+    if (seq !== resolveSeq) return;
+    const atlas = useAtlasStore.getState();
+    const alternates = computeAlternates(local, atlas.weights, inputs);
+    useAtlasStore.setState({
+      target: local,
+      isResolvingTarget: false,
+      alternates,
+      selectedAlternateId: null,
+    });
+    return;
+  }
+
+  // mark the fetch in-flight so the sidebar can render its "resolving"
+  // hint while keeping the previous target rendered underneath.
+  useAtlasStore.setState({ isResolvingTarget: true });
+
+  const profile = await fetchCityProfile(city);
+  if (seq !== resolveSeq) return;
+
+  if (!profile) {
+    useAtlasStore.setState({
+      target: null,
+      isResolvingTarget: false,
+      alternates: [],
+      selectedAlternateId: null,
+    });
+    return;
+  }
+
+  const record = cityRecordFromProfile(profile);
+  const atlas = useAtlasStore.getState();
+  const alternates = computeAlternates(record, atlas.weights, inputs);
+  useAtlasStore.setState({
+    target: record,
+    isResolvingTarget: false,
+    alternates,
+    selectedAlternateId: null,
+  });
+}
+
+// ---- initial state --------------------------------------------------------
 
 const INITIAL_TARGET = findCityByName("new york, ny");
 const INITIAL_INPUTS = useSimStore.getState().inputs;
@@ -164,20 +204,14 @@ export const useAtlasStore = create<AtlasState>((set) => ({
     }),
 
   target: INITIAL_TARGET,
+  isResolvingTarget: false,
   alternates: INITIAL_ALTERNATES,
   selectedAlternateId: null,
 
   setSelectedAlternateId: (id) => set({ selectedAlternateId: id }),
 }));
 
-// ---- sim → atlas sync ------------------------------------------------------
-// when COMMITTED sim inputs change (post-RECOMPUTE), either:
-//   1. inputs.city changed → resolve a new target (async if non-dataset),
-//      then recompute alternates against the new target + current weights
-//   2. only context fields changed (income/field/partner/etc) → keep the
-//      same target, just recompute alternates
-// the subscribe is sync; the async geocode path uses fire-and-forget +
-// setState when it returns.
+// ---- sim → atlas sync -----------------------------------------------------
 
 useSimStore.subscribe((state, prev) => {
   const a = state.inputs;
@@ -194,24 +228,9 @@ useSimStore.subscribe((state, prev) => {
   if (!cityChanged && !ctxChanged) return;
 
   if (cityChanged) {
-    resolveTarget(a.city)
-      .then((target) => {
-        const atlas = useAtlasStore.getState();
-        const alternates = computeAlternates(target, atlas.weights, a);
-        const stillSelected =
-          atlas.selectedAlternateId !== null &&
-          alternates.some((alt) => alt.id === atlas.selectedAlternateId);
-        useAtlasStore.setState({
-          target,
-          alternates,
-          selectedAlternateId: stillSelected ? atlas.selectedAlternateId : null,
-        });
-      })
-      .catch(() => {
-        // resolveTarget already swallows geocode errors and returns null;
-        // this catch is just belt-and-suspenders so a thrown error from
-        // findAlternates/setState can't poison the subscribe.
-      });
+    // fire-and-forget; the kickoff function manages isResolvingTarget + the
+    // sequence guard. errors are swallowed inside fetchCityProfile.
+    void kickoffResolveTarget(a.city, a);
     return;
   }
 

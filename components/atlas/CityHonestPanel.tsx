@@ -10,6 +10,7 @@ import {
   type CityScore,
 } from "@/lib/atlas/score";
 import type { CityRecord } from "@/lib/atlas/cities";
+import type { SourceTag } from "@/lib/atlas/cityProfile";
 
 import { MonoLabel } from "./MonoLabel";
 
@@ -50,6 +51,44 @@ function splitNameForState(name: string) {
   return { city: cityPart ?? name, state: (statePart ?? "").toUpperCase() };
 }
 
+// ---- provenance tags (partial records only) -------------------------------
+// when a target was built from /api/cityProfile we render a small mono tag
+// next to each row value so the user can see exactly which external source
+// provided which number (or "—" when no source covers that field).
+
+const SOURCE_LABEL: Record<SourceTag, string> = {
+  "osm": "OSM",
+  "open-meteo": "OPEN-METEO",
+  "world-bank": "COUNTRY EST",
+  "rest-countries": "REST COUNTRIES",
+  "geodb": "GEODB",
+  "country-estimate": "COUNTRY EST",
+  "unknown": "—",
+};
+
+/** which cityProfile.sources key (if any) backs each atlas factor. factors
+ *  with no global source mapping render as "—" when the target is partial. */
+const FACTOR_SOURCE_KEY: Partial<Record<AtlasFactor, string>> = {
+  schools: "schoolEnrollment",
+  safety: "safetyProxy",
+  communitySize: "metroPopulation",
+  cost: "costOfLiving",
+  weather: "annualSunnyDays",
+};
+
+function provenanceTagFor(
+  factor: AtlasFactor,
+  target: CityRecord,
+): string | null {
+  const confidence = target.confidence ?? "full";
+  if (confidence === "full") return null;
+  const sourceKey = FACTOR_SOURCE_KEY[factor];
+  if (!sourceKey) return "—";
+  const tag = target.sources?.[sourceKey];
+  if (!tag || tag === "unknown") return "—";
+  return SOURCE_LABEL[tag];
+}
+
 function MatchDot({ tone }: { tone: DotTone }) {
   if (tone === "none") return null;
   const color =
@@ -75,9 +114,11 @@ interface RowProps {
   raw: string;
   tone: DotTone;
   weight: number;
+  /** optional provenance tag for partial-data records (target only). */
+  tag?: string | null;
 }
 
-function Row({ label, raw, tone, weight }: RowProps) {
+function Row({ label, raw, tone, weight, tag }: RowProps) {
   const muted = tone === "muted" || tone === "none";
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-line/60 py-2">
@@ -103,6 +144,11 @@ function Row({ label, raw, tone, weight }: RowProps) {
         >
           {raw}
         </span>
+        {tag ? (
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.15em] text-muted">
+            {tag}
+          </span>
+        ) : null}
         <MatchDot tone={tone} />
       </span>
     </div>
@@ -456,6 +502,7 @@ function TargetView({
           weights[meta.factor],
         )}
         weight={weights[meta.factor]}
+        tag={provenanceTagFor(meta.factor, target)}
       />
     );
   }
@@ -506,10 +553,9 @@ function TargetView({
       <Section heading="FOR YOU">{youRows.map(rowFor)}</Section>
 
       <p className="font-serif italic text-muted">
-        data sourced for the 20 us metros below. weather and community size
-        are preference factors — there's no objectively-better value, only
-        what fits your family. anything tagged ESTIMATE · V1 is illustrative
-        until we expand the dataset.
+        20 us metros are fully sourced. global cities use open-meteo for
+        climate and world-bank country signals — labeled per field.
+        alternates currently come from the us pool; global alternates are v3.
       </p>
     </div>
   );
@@ -634,10 +680,9 @@ function CompareView({
       <Section heading="FOR YOU">{youRows.map(compareRowFor)}</Section>
 
       <p className="font-serif italic text-muted">
-        data sourced for the 20 us metros below. weather and community size
-        are preference factors — there's no objectively-better value, only
-        what fits your family. anything tagged ESTIMATE · V1 is illustrative
-        until we expand the dataset.
+        20 us metros are fully sourced. global cities use open-meteo for
+        climate and world-bank country signals — labeled per field.
+        alternates currently come from the us pool; global alternates are v3.
       </p>
     </div>
   );

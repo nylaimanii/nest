@@ -290,7 +290,7 @@ export function InputPanel() {
           onChange={(s) => setDraftInput("city", s)}
           suggestions={CITY_SUGGESTIONS}
           placeholder="new york, ny"
-          panelFooter="any city worldwide works — sourced data shown for US metros above."
+          panelFooter="any city worldwide — full data for the 20 us metros listed above, climate + country signals for everywhere else."
         />
       </div>
     </div>

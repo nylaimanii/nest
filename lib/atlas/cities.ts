@@ -2,6 +2,18 @@
 // not sourced; replace with a sourced dataset (ACS / NCES / GreenSpace
 // Index / locality reports) in lib/atlas/cities.real.ts later.
 
+import type { SourceTag } from "./cityProfile";
+
+/** four data-confidence tiers, set on the CityRecord itself (distinct from
+ *  CityScore.confidence, which is derived from how many factors scored):
+ *    - "full":           hand-curated US metro in the seed dataset
+ *    - "partial-us":     typed-in US city not in the dataset (cityProfile
+ *                        gave us lat/lng + sometimes scattered country data)
+ *    - "partial-global": typed-in international city (climate + country-
+ *                        level signals via cityProfile)
+ *    - "unknown":        failed lookup (should be cleared from state) */
+export type Confidence = "full" | "partial-us" | "partial-global" | "unknown";
+
 export type CityRecord = {
   id: string;
   name: string; // "new york, ny" — always lowercased "city, state-abbrev"
@@ -30,6 +42,17 @@ export type CityRecord = {
   /** approximate sunny days per year, from NOAA/NWS averages. preference
    *  factor — sunny vs gray is taste, not better/worse. */
   annualSunnyDays: number | null;
+  /** data-confidence tier (see Confidence type). seed dataset records are
+   *  "full"; records built from cityProfile are "partial-us" or
+   *  "partial-global" depending on whether the country is the US. */
+  confidence?: Confidence;
+  /** country name for non-US records — used by the sidebar provenance tag.
+   *  null/undefined for US (state code is part of `name`). */
+  country?: string | null;
+  /** per-field provenance from cityProfile.sources, attached when the
+   *  record comes from the global lookup path. undefined for the seed
+   *  dataset (provenance is implicit: "hand-curated"). */
+  sources?: Record<string, SourceTag>;
 };
 
 // flat 24% effective tax (mirrors lib/sim/model.ts TAX_RATE).
@@ -53,6 +76,7 @@ function city(
 ): CityRecord {
   return {
     ...data,
+    confidence: data.confidence ?? "full",
     takeHomeAfterChildcarePct: takeHomePctFor(data.childcareMonthly),
   };
 }
@@ -379,26 +403,9 @@ export function findCityById(id: string): CityRecord | null {
   return CITIES.find((c) => c.id === id) ?? null;
 }
 
-/** turn a geocoded name + lat/lng into a partial-data record (everything null). */
-export function makePartialCity(
-  name: string,
-  lat: number,
-  lng: number,
-): CityRecord {
-  return {
-    id: name.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-    name,
-    lat,
-    lng,
-    costOfLiving: null,
-    medianRent2BR: null,
-    schoolScore: null,
-    safetyScore: null,
-    greenSpacePct: null,
-    childcareMonthly: null,
-    takeHomeAfterChildcarePct: null,
-    careerHubFor: [],
-    metroPopulation: null,
-    annualSunnyDays: null,
-  };
+/** id slug from a normalized city name. shared with the cityProfile path
+ *  so a typed "tokyo, japan" produces the same id regardless of which
+ *  fetch path resolved it. */
+export function cityIdFromName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
