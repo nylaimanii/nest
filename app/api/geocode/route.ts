@@ -85,7 +85,7 @@ export async function GET(req: Request) {
   target.searchParams.set("addressdetails", "1");
   target.searchParams.set("limit", "1");
   target.searchParams.set("accept-language", "en");
-  target.searchParams.set("q", `${q} united states`);
+  target.searchParams.set("q", q);
 
   let hits: NominatimHit[];
   try {
@@ -105,17 +105,22 @@ export async function GET(req: Request) {
 
   const r = hits[0];
   const addr = r.address ?? {};
-  // require US results — keeps state-abbrev normalization sound.
-  if (addr.country && addr.country !== "United States") {
-    return NextResponse.json(null);
-  }
+  const isUS = addr.country === "United States" || addr.country === undefined;
   const cityPart =
     addr.city ?? addr.town ?? addr.village ?? addr.county ?? r.display_name.split(",")[0] ?? q;
   const stateName = (addr.state ?? "").toLowerCase();
   const stateAbbr = STATE_ABBR[stateName] ?? "";
 
   const cleanCity = cityPart.toLowerCase().replace(/\s+/g, " ").trim();
-  const name = stateAbbr ? `${cleanCity}, ${stateAbbr}` : cleanCity;
+  // "city, st" for US (when we recognized the state); "city, country" for
+  // everything else. country presence is what flips the format — without it,
+  // downstream callers can't tell US from international and tax math breaks.
+  const countryName = (addr.country ?? "").toLowerCase().trim();
+  const name = isUS && stateAbbr
+    ? `${cleanCity}, ${stateAbbr}`
+    : countryName
+      ? `${cleanCity}, ${countryName}`
+      : cleanCity;
   const lat = Number.parseFloat(r.lat);
   const lng = Number.parseFloat(r.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {

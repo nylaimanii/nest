@@ -71,9 +71,12 @@ export function CitySearch() {
       ) : null}
       {status === "not-found" ? (
         <span className="font-mono text-[0.7rem] text-muted">
-          not found — try a major US metro.
+          not found — try a different spelling or include the country.
         </span>
       ) : null}
+      <span className="font-serif text-[0.75rem] italic text-muted">
+        any city worldwide works — sourced data shown for US metros.
+      </span>
     </form>
   );
 }

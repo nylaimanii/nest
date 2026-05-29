@@ -183,6 +183,7 @@ export function InputPanel() {
           onChange={(s) => setInput("city", s)}
           suggestions={CITY_SUGGESTIONS}
           placeholder="new york, ny"
+          panelFooter="any city worldwide works — sourced data shown for US metros above."
         />
 
         <AtlasTypeahead

@@ -20,5 +20,5 @@ export const RANGES = {
   partnerAge: { min: 18, max: 55, step: 1 },
   householdIncome: { min: 40000, max: 400000, step: 5000 },
   kidsWanted: { min: 0, max: 4, step: 1 },
-  startAge: { min: 24, max: 42, step: 1 },
+  startAge: { min: 18, max: 102, step: 1 },
 } as const;

@@ -15,6 +15,10 @@ export interface AtlasTypeaheadProps {
   className?: string;
   /** small mono hint rendered under the input (e.g. validation message). */
   hint?: string;
+  /** optional italic serif footer rendered INSIDE the suggestion panel,
+   *  below the suggestions list. used to scope what the suggestions cover
+   *  (e.g. "any city worldwide works — sourced data shown for US metros"). */
+  panelFooter?: React.ReactNode;
 }
 
 const MAX_SUGGESTIONS = 6;
@@ -33,6 +37,7 @@ export function AtlasTypeahead({
   placeholder,
   className,
   hint,
+  panelFooter,
 }: AtlasTypeaheadProps) {
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -138,6 +143,14 @@ export function AtlasTypeahead({
               {s}
             </li>
           ))}
+          {panelFooter ? (
+            <li
+              aria-hidden="true"
+              className="border-t border-line px-3 py-1.5 font-serif text-[0.75rem] italic text-muted"
+            >
+              {panelFooter}
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </div>

@@ -58,15 +58,18 @@ function FertilityCurveBody() {
   const inputs = useSimStore((s) => s.inputs);
   const snap = useSimStore((s) => s.snapshot);
 
-  // same projection the model uses, so the dot lands exactly where
-  // HonestPanel's `FERTILITY @ START` value comes from.
-  const markerAge = useMemo(() => {
+  // same projection the model uses. carrierAgeAtStart is the honest
+  // unclamped value (shown in the label); markerAge is clamped to the
+  // 24-42 anchor window so the dot pins to the curve edge for ages
+  // outside the medically meaningful range.
+  const carrierAgeAtStart = useMemo(() => {
     const carrierNow = Math.min(
       inputs.userAge,
       inputs.partnerAge ?? inputs.userAge,
     );
-    return clamp(carrierNow + (inputs.startAge - inputs.userAge), 24, 42);
+    return carrierNow + (inputs.startAge - inputs.userAge);
   }, [inputs.userAge, inputs.partnerAge, inputs.startAge]);
+  const markerAge = clamp(carrierAgeAtStart, 24, 42);
   const markerPct = Math.round(snap.fertilityProbAtStart * 100);
 
   const data = useMemo(buildCurve, []);
@@ -148,7 +151,7 @@ function FertilityCurveBody() {
         strokeWidth={2}
       >
         <Label
-          value={`${markerPct}% @ age ${markerAge}`}
+          value={`${markerPct}% @ age ${carrierAgeAtStart}`}
           position={labelPosition}
           offset={12}
           fill={CHART.green}

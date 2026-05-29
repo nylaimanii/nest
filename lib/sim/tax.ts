@@ -149,3 +149,47 @@ export function stateAbbrevFromCity(city: string): string | null {
   if (abbrev.length !== 2) return null;
   return abbrev;
 }
+
+// every US state + DC, both 2-letter (uppercased) and full name
+// (lowercased). used to spot whether a "city, region" string points to a
+// US location; isInternational() returns true for anything that doesn't
+// match either side. broader than STATE_TAX (which only covers the 10
+// metros we currently profile) — a phoenix, az user is still US.
+const US_STATE_ABBR: ReadonlySet<string> = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+  "DC",
+]);
+const US_STATE_NAMES: ReadonlySet<string> = new Set([
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+  "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+  "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+  "maine", "maryland", "massachusetts", "michigan", "minnesota",
+  "mississippi", "missouri", "montana", "nebraska", "nevada",
+  "new hampshire", "new jersey", "new mexico", "new york", "north carolina",
+  "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania",
+  "rhode island", "south carolina", "south dakota", "tennessee", "texas",
+  "utah", "vermont", "virginia", "washington", "west virginia", "wisconsin",
+  "wyoming", "district of columbia",
+]);
+
+/**
+ * true when the city's region part is neither a known US state abbreviation
+ * nor a known US state name. used by the UI to flag international cities —
+ * we model federal-only tax for these (no state tax, no medicare/SS local
+ * adjustments). cities with no comma (e.g. bare "tokyo") are also treated
+ * international, since we can't infer a US state for them.
+ */
+export function isInternational(city: string): boolean {
+  if (!city) return false;
+  const parts = city.split(",").map((s) => s.trim());
+  if (parts.length < 2) return true;
+  const region = parts[1];
+  if (region.length === 2 && US_STATE_ABBR.has(region.toUpperCase()))
+    return false;
+  if (US_STATE_NAMES.has(region.toLowerCase())) return false;
+  return true;
+}
