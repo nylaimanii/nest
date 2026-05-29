@@ -10,8 +10,11 @@ import {
   type AtlasWeights,
   type CityScore,
 } from "@/lib/atlas/score";
-// reading sim state at action time — atlas scores depend on income + career.
+import type { FilingStatus } from "@/lib/sim/tax";
+// reading sim state at action time — atlas scores depend on income + field +
+// filing (partnerAge) + kidsWanted (for CTC in the take-home math).
 import { useSimStore } from "@/store/sim";
+import type { SimInputs } from "@/types";
 
 interface AtlasState {
   weights: AtlasWeights;
@@ -34,13 +37,24 @@ const DEFAULT_WEIGHTS: AtlasWeights = {
 
 const INITIAL_ROSTER: CityRecord[] = [NEW_YORK_NY, AUSTIN_TX];
 
+function filingFor(inputs: SimInputs): FilingStatus {
+  return inputs.partnerAge != null ? "married_jointly" : "single";
+}
+
 function recompute(
   roster: CityRecord[],
   weights: AtlasWeights,
 ): CityScore[] {
   const sim = useSimStore.getState();
   return roster.map((c) =>
-    scoreCity(c, weights, sim.inputs.householdIncome, sim.inputs.field),
+    scoreCity(
+      c,
+      weights,
+      sim.inputs.householdIncome,
+      sim.inputs.field,
+      filingFor(sim.inputs),
+      sim.inputs.kidsWanted,
+    ),
   );
 }
 
@@ -87,16 +101,18 @@ export const useAtlasStore = create<AtlasState>((set) => ({
   setActiveCity: (id) => set({ activeCityId: id }),
 }));
 
-// live sim → atlas sync: any change to household income or field in the sim
-// store rebuilds the atlas scores against the current roster + weights, so
-// dragging an income slider on /simulation updates the atlas right-panel
-// numbers without the user needing to touch an atlas control first.
-// Zustand v5's vanilla subscribe supplies (state, prev); we diff manually
-// instead of pulling in subscribeWithSelector middleware.
+// live sim → atlas sync: changes to income / field / partnerAge / kidsWanted
+// in the sim store rebuild atlas scores against the current roster + weights,
+// so dragging any of those on /simulation updates the atlas right-panel
+// numbers (income, filing status, and CTC eligibility all feed take-home in
+// scoreCity's worstPhrase). zustand v5 vanilla subscribe gives (state, prev);
+// we diff manually instead of pulling in subscribeWithSelector middleware.
 useSimStore.subscribe((state, prev) => {
   if (
     state.inputs.householdIncome === prev.inputs.householdIncome &&
-    state.inputs.field === prev.inputs.field
+    state.inputs.field === prev.inputs.field &&
+    state.inputs.partnerAge === prev.inputs.partnerAge &&
+    state.inputs.kidsWanted === prev.inputs.kidsWanted
   ) {
     return;
   }
@@ -108,6 +124,8 @@ useSimStore.subscribe((state, prev) => {
         atlas.weights,
         state.inputs.householdIncome,
         state.inputs.field,
+        filingFor(state.inputs),
+        state.inputs.kidsWanted,
       ),
     ),
   });

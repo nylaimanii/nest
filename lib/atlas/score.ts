@@ -1,6 +1,11 @@
 // determinism rule (CLAUDE.md): scores are CODE, never LLM-generated.
 // honest tradeoff strings are templated from the numbers below, not prose.
 
+import {
+  computeTakeHome,
+  stateAbbrevFromCity,
+  type FilingStatus,
+} from "@/lib/sim/tax";
 import type { CityRecord } from "./cities";
 
 export type AtlasWeights = {
@@ -110,11 +115,26 @@ function bestPhrase(c: CityRecord, userCareer: string): string | null {
   return null;
 }
 
-function worstPhrase(c: CityRecord, userIncome: number): string | null {
+function worstPhrase(
+  c: CityRecord,
+  userIncome: number,
+  filing: FilingStatus,
+  userKidsWanted: number,
+): string | null {
   if (c.childcareMonthly !== null && userIncome > 0) {
-    const takeHome = userIncome * 0.76;
-    const pct = Math.round(((c.childcareMonthly * 12) / takeHome) * 100);
-    if (pct >= 25) return `childcare eats ${pct}% of your take-home`;
+    // real take-home in THIS city (its state tax) at the user's filing /
+    // CTC eligibility — same engine model.ts uses.
+    const state = stateAbbrevFromCity(c.name);
+    const { takeHome } = computeTakeHome(
+      userIncome,
+      Math.max(0, userKidsWanted),
+      filing,
+      state,
+    );
+    if (takeHome > 0) {
+      const pct = Math.round(((c.childcareMonthly * 12) / takeHome) * 100);
+      if (pct >= 25) return `childcare eats ${pct}% of your take-home`;
+    }
   }
   if (c.medianRent2BR !== null && c.medianRent2BR >= 3000)
     return `rent is $${c.medianRent2BR.toLocaleString("en-US")}/mo for a 2BR`;
@@ -131,12 +151,14 @@ function composeTradeoff(
   confidence: CityScore["confidence"],
   userCareer: string,
   userIncome: number,
+  filing: FilingStatus,
+  userKidsWanted: number,
 ): string {
   if (confidence === "unknown") {
     return "not enough data yet — v1 dataset doesn't cover this metro.";
   }
   const best = bestPhrase(c, userCareer);
-  const worst = worstPhrase(c, userIncome);
+  const worst = worstPhrase(c, userIncome, filing, userKidsWanted);
   // keep all branches in atlas lowercase tone, matching CLAUDE.md.
   if (best && worst) return `${best}, but ${worst}.`;
   if (best) return `${best}.`;
@@ -159,6 +181,8 @@ export function scoreCity(
   w: AtlasWeights,
   userIncome: number,
   userCareer: string,
+  filing: FilingStatus,
+  userKidsWanted: number,
 ): CityScore {
   const perFactor = {} as Record<AtlasFactor, FactorScore>;
   let weightedSum = 0;
@@ -200,7 +224,14 @@ export function scoreCity(
     city: c,
     total,
     perFactor,
-    honestTradeoff: composeTradeoff(c, confidence, userCareer, userIncome),
+    honestTradeoff: composeTradeoff(
+      c,
+      confidence,
+      userCareer,
+      userIncome,
+      filing,
+      userKidsWanted,
+    ),
     confidence,
   };
 }

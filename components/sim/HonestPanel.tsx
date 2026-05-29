@@ -2,6 +2,7 @@
 
 import { AtlasCard } from "@/components/atlas/Card";
 import { Stat } from "@/components/atlas/Stat";
+import { cn } from "@/lib/utils";
 import { useSimStore } from "@/store/sim";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -43,11 +44,29 @@ export function HonestPanel() {
         <AtlasCard>
           <Stat label="PEAK BURDEN RATIO" value={pct(snap.burdenRatio)} />
         </AtlasCard>
+        <AtlasCard className="col-span-2">
+          <Stat
+            label="CHILDCARE / MO"
+            value={`$${snap.childcareMonthlyUsed.toLocaleString("en-US")}`}
+          />
+          <div className="mt-1">
+            <span
+              className={cn(
+                "font-mono text-[0.65rem] uppercase tracking-[0.12em]",
+                snap.childcareSourced ? "text-green" : "text-terracotta",
+              )}
+            >
+              {snap.childcareSourced
+                ? `SOURCED · ${snap.inputs.city}`
+                : "ESTIMATE · V1"}
+            </span>
+          </div>
+        </AtlasCard>
       </div>
       <p className="font-serif italic text-muted">
-        tax math reflects 2026 federal brackets and state lookup. childcare,
-        fertility, and benefits remain v1 illustrative — sourced data lands
-        later.
+        tax math and city childcare reflect real data where available.
+        fertility curves and benefit amounts remain v1 illustrative — sourced
+        data lands later.
       </p>
     </div>
   );

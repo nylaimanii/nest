@@ -48,4 +48,8 @@ export type SimSnapshot = {
   benefitsCapturable: number;
   /** peak year kid-cost / take-home (0..1) */
   burdenRatio: number;
+  /** true when the user's city is in the atlas dataset with real childcare data. */
+  childcareSourced: boolean;
+  /** monthly per-kid childcare $ the model used (sourced or fallback estimate). */
+  childcareMonthlyUsed: number;
 };

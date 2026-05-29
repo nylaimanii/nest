@@ -2,15 +2,46 @@
 // Replace with sourced values + per-city deltas in lib/sim/model.real.ts later.
 
 import type { SimInputs, SimSnapshot } from "@/types";
+import { findCityByName } from "@/lib/atlas/cities";
 import { computeTakeHome, stateAbbrevFromCity, type FilingStatus } from "./tax";
 
 // ----- placeholder constants ------------------------------------------------
 
-// per-kid annual cost in USD, indexed by the child's age (0..9).
-// front-loaded toward childcare-heavy early years, taper after school start.
-const KID_COST_BY_AGE = [
+// fallback per-kid annual cost in USD, indexed by the child's age (0..9).
+// only used when the user's city isn't in the atlas dataset. shape (full
+// daycare → school taper) stays the same as the sourced curve below.
+const KID_COST_BY_AGE_FALLBACK = [
   22000, 22000, 22000, 18000, 16000, 16000, 14000, 14000, 14000, 14000,
 ] as const;
+
+// childcare-heavy years 0–3 at full annual; tapers post-school start.
+const AGE_MULTIPLIERS = [1, 1, 1, 0.8, 0.6, 0.6, 0.4, 0.4, 0.4, 0.4] as const;
+
+/** city-sourced 10-year cost curve per kid. falls back to placeholder. */
+function kidCostCurveFor(city: string): {
+  curve: number[];
+  sourced: boolean;
+  childcareMonthlyUsed: number;
+} {
+  const hit = findCityByName(city);
+  if (hit && hit.childcareMonthly !== null) {
+    const annual = hit.childcareMonthly * 12;
+    const curve = AGE_MULTIPLIERS.map((m) =>
+      Math.round((annual * m) / 100) * 100,
+    );
+    return {
+      curve,
+      sourced: true,
+      childcareMonthlyUsed: hit.childcareMonthly,
+    };
+  }
+  return {
+    curve: Array.from(KID_COST_BY_AGE_FALLBACK),
+    sourced: false,
+    // the fallback first-three-years cost ÷ 12, just to give the UI a number.
+    childcareMonthlyUsed: Math.round(KID_COST_BY_AGE_FALLBACK[0] / 12 / 100) * 100,
+  };
+}
 
 // gross-income multipliers per year over 10 years, by careerTrack.
 const INCOME_TRACK: Record<SimInputs["careerTrack"], readonly number[]> = {
@@ -94,6 +125,8 @@ export function runSim(inputs: SimInputs): SimSnapshot {
   const filing: FilingStatus =
     inputs.partnerAge != null ? "married_jointly" : "single";
   const state = stateAbbrevFromCity(inputs.city);
+  const { curve: kidCostCurve, sourced: childcareSourced, childcareMonthlyUsed } =
+    kidCostCurveFor(inputs.city);
 
   for (let i = 0; i < HORIZON; i++) {
     let yearKidCost = 0;
@@ -103,7 +136,7 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     for (const off of arrivalOffsets) {
       const kidAge = i - off;
       if (kidAge >= 0 && kidAge <= 9) {
-        yearKidCost += KID_COST_BY_AGE[kidAge];
+        yearKidCost += kidCostCurve[kidAge];
       }
       if (kidAge >= 0 && kidAge <= 17) kidsAlive += 1;
     }
@@ -162,5 +195,7 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     lifetimeEarningsDelta,
     benefitsCapturable,
     burdenRatio,
+    childcareSourced,
+    childcareMonthlyUsed,
   }) as SimSnapshot;
 }
