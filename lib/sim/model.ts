@@ -3,6 +3,11 @@
 
 import type { SimInputs, SimSnapshot } from "@/types";
 import { findCityByName } from "@/lib/atlas/cities";
+import {
+  DEFAULT_OCCUPATION,
+  findOccupation,
+  type Occupation,
+} from "./fields";
 import { computeTakeHome, stateAbbrevFromCity, type FilingStatus } from "./tax";
 
 // ----- placeholder constants ------------------------------------------------
@@ -43,12 +48,31 @@ function kidCostCurveFor(city: string): {
   };
 }
 
-// gross-income multipliers per year over 10 years, by careerTrack.
-const INCOME_TRACK: Record<SimInputs["careerTrack"], readonly number[]> = {
-  steady: [1.0, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.1],
-  ascending: [1.0, 1.05, 1.1, 1.16, 1.22, 1.28, 1.34, 1.4, 1.46, 1.52],
-  demanding: [1.0, 1.08, 1.16, 1.24, 1.32, 1.4, 1.48, 1.56, 1.64, 1.72],
-};
+/**
+ * income grows faster the more intense the work, with diminishing returns
+ * past 60hrs. base growth = 1.5%/year. each hour over 40 adds ~0.2% annual
+ * growth, capped at 8% (= 0.015 + 0.065). values below 40 don't subtract
+ * below the floor — a 30hr/wk schedule still grows at base 1.5%/year.
+ */
+function yearGrowthRate(workIntensity: number): number {
+  return 0.015 + Math.min(0.065, Math.max(0, (workIntensity - 40) * 0.002));
+}
+
+/**
+ * time-poverty penalty on kidCost as it enters the BURDEN ratio (never the
+ * dollar figures shown in the panel). past 55hrs/week, every extra hour
+ * adds 0.5% perceived burden, capped at +15%. for ≤55, multiplier = 1.
+ */
+function timePenaltyMultiplier(workIntensity: number): number {
+  if (workIntensity <= 55) return 1;
+  return Math.min(1.15, 1 + (workIntensity - 55) * 0.005);
+}
+
+function incomeStabilityFor(volatility: number): SimSnapshot["incomeStability"] {
+  if (volatility < 0.1) return "high";
+  if (volatility < 0.2) return "moderate";
+  return "low";
+}
 
 // tax math now lives in lib/sim/tax.ts (2026 federal brackets + std
 // deduction + CTC + 10-state lookup). drift.ts/score.ts frictions still
@@ -124,7 +148,21 @@ export function runSim(inputs: SimInputs): SimSnapshot {
   const cumulativeChildCost: number[] = [];
 
   let running = 0;
-  const track = INCOME_TRACK[inputs.careerTrack];
+
+  // resolve occupation — null fall-through means the user typed something
+  // not in our BLS-sourced set, so we use the default shape but report
+  // occupationSourced=false to the UI.
+  const occMatch: Occupation | null = findOccupation(inputs.field);
+  const occ = occMatch ?? DEFAULT_OCCUPATION;
+  const occupationSourced = occMatch !== null;
+  const occupationUsed = occMatch ? occMatch.label : inputs.field;
+
+  // BLS growth figures are 10-year cumulative, so divide by 10 to get an
+  // annual contribution layered on top of the intensity-driven rate.
+  const annualGrowth =
+    yearGrowthRate(inputs.workIntensity) + occ.projectedGrowth / 10;
+  const timePenalty = timePenaltyMultiplier(inputs.workIntensity);
+
   const filing: FilingStatus =
     inputs.partnerAge != null ? "married_jointly" : "single";
   const state = stateAbbrevFromCity(inputs.city);
@@ -143,7 +181,7 @@ export function runSim(inputs: SimInputs): SimSnapshot {
       }
       if (kidAge >= 0 && kidAge <= 17) kidsAlive += 1;
     }
-    const gross = inputs.householdIncome * track[i];
+    const gross = inputs.householdIncome * Math.pow(1 + annualGrowth, i);
     const tax = computeTakeHome(gross, kidsAlive, filing, state);
     const takeHome = tax.takeHome;
     const net = round100(takeHome - yearKidCost);
@@ -178,11 +216,13 @@ export function runSim(inputs: SimInputs): SimSnapshot {
       (inputs.householdIncome < 150000 ? 6000 : 3000),
   );
 
-  // peak burden ratio across the 10-year window — uses real post-tax take-home.
+  // peak burden ratio across the 10-year window — time penalty inflates
+  // the perceived kidCost in the ratio (not in the cash flow shown), so
+  // demanding hours show up as "burden" without lying about the dollar.
   let peakBurden = 0;
   for (let i = 0; i < HORIZON; i++) {
     const th = takeHomeByYear[i];
-    const ratio = th > 0 ? kidCost[i] / th : 0;
+    const ratio = th > 0 ? (kidCost[i] * timePenalty) / th : 0;
     if (ratio > peakBurden) peakBurden = ratio;
   }
   const burdenRatio = round2(clamp(peakBurden, 0, 1));
@@ -200,5 +240,8 @@ export function runSim(inputs: SimInputs): SimSnapshot {
     burdenRatio,
     childcareSourced,
     childcareMonthlyUsed,
+    occupationUsed,
+    occupationSourced,
+    incomeStability: incomeStabilityFor(occ.volatility),
   }) as SimSnapshot;
 }

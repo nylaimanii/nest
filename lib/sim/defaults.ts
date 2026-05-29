@@ -11,8 +11,13 @@ export const DEFAULT_INPUTS: SimInputs = {
   city: "new york, ny",
   kidsWanted: 3,
   startAge: 35,
-  careerTrack: "ascending",
-  field: "tech",
+  // 50 hrs/week is the "ambitious knowledge worker" baseline — past the 40
+  // floor but well under the diminishing-returns ceiling at 60+. matches the
+  // representative scenario's "ascending career in tech" framing pre-dial.
+  workIntensity: 50,
+  // matches the previous "tech" default; resolves to a sourced occupation
+  // so the HonestPanel SOURCED · BLS tag lights up on first paint.
+  field: "software developer",
 };
 
 export const RANGES = {
@@ -21,4 +26,5 @@ export const RANGES = {
   householdIncome: { min: 40000, max: 400000, step: 5000 },
   kidsWanted: { min: 0, max: 4, step: 1 },
   startAge: { min: 18, max: 102, step: 1 },
+  workIntensity: { min: 30, max: 80, step: 1 },
 } as const;

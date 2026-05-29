@@ -1,53 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { AtlasDial } from "@/components/atlas/AtlasDial";
 import { AtlasTextInput } from "@/components/atlas/AtlasTextInput";
 import { AtlasTypeahead } from "@/components/atlas/AtlasTypeahead";
 import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { CITIES } from "@/lib/atlas/cities";
 import { RANGES } from "@/lib/sim/defaults";
+import { findOccupation, OCCUPATION_LABELS } from "@/lib/sim/fields";
 import { useSimStore } from "@/store/sim";
-import type { SimInputs } from "@/types";
 
 const CITY_SUGGESTIONS: readonly string[] = CITIES.map((c) => c.name);
-
-const CAREER_OPTIONS: ReadonlyArray<SimInputs["careerTrack"]> = [
-  "steady",
-  "ascending",
-  "demanding",
-];
-
-const FIELD_OPTIONS: ReadonlyArray<SimInputs["field"]> = [
-  "tech",
-  "finance",
-  "biotech",
-  "government",
-  "manufacturing",
-  "healthcare",
-  "creative",
-];
-
-function isCareerTrack(s: string): s is SimInputs["careerTrack"] {
-  return (CAREER_OPTIONS as readonly string[]).includes(s);
-}
-function isField(s: string): s is SimInputs["field"] {
-  return (FIELD_OPTIONS as readonly string[]).includes(s);
-}
 
 export function InputPanel() {
   const inputs = useSimStore((s) => s.inputs);
   const setInput = useSimStore((s) => s.setInput);
 
-  // local buffers for typeahead fields whose committed store value is a
-  // strict enum — we keep the raw typed string here and only write through
-  // when it matches a valid option. lets the user type "tec" and see
-  // suggestions without dropping the careerTrack/field state.
-  const [careerBuffer, setCareerBuffer] = useState<string>(inputs.careerTrack);
+  // local buffer for the field typeahead so the user can keep typing without
+  // the store snapping to the partial string mid-keystroke. every keystroke
+  // writes through; the buffer is used purely to drive the unsourced hint.
   const [fieldBuffer, setFieldBuffer] = useState<string>(inputs.field);
+  const [fieldUnsourced, setFieldUnsourced] = useState<boolean>(
+    inputs.field !== "" && findOccupation(inputs.field) === null,
+  );
 
-  const careerValid = isCareerTrack(careerBuffer);
-  const fieldValid = isField(fieldBuffer);
+  // brief debounce — avoids flashing "estimate · v1" while the user is
+  // mid-word (typing "softw" on the way to "software developer").
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFieldUnsourced(
+        fieldBuffer !== "" && findOccupation(fieldBuffer) === null,
+      );
+    }, 400);
+    return () => clearTimeout(t);
+  }, [fieldBuffer]);
 
   // startAge can reach the lower of the model floor (24) and userAge so the
   // high-fertility band stays reachable from the slider.
@@ -186,19 +173,16 @@ export function InputPanel() {
           panelFooter="any city worldwide works — sourced data shown for US metros above."
         />
 
-        <AtlasTypeahead
-          label="CAREER"
-          value={careerBuffer}
-          onChange={(s) => {
-            setCareerBuffer(s);
-            if (isCareerTrack(s)) setInput("careerTrack", s);
-          }}
-          suggestions={CAREER_OPTIONS}
-          hint={
-            careerValid || careerBuffer === ""
-              ? undefined
-              : `press one of: ${CAREER_OPTIONS.join(", ")}`
-          }
+        <AtlasDial
+          label="WORK INTENSITY"
+          value={inputs.workIntensity}
+          onChange={(v) => setInput("workIntensity", v)}
+          min={RANGES.workIntensity.min}
+          max={RANGES.workIntensity.max}
+          step={RANGES.workIntensity.step}
+          format={(v) => `${v} hrs/week`}
+          leftAnchor="STEADY"
+          rightAnchor="INTENSE"
         />
 
         <AtlasTypeahead
@@ -206,13 +190,13 @@ export function InputPanel() {
           value={fieldBuffer}
           onChange={(s) => {
             setFieldBuffer(s);
-            if (isField(s)) setInput("field", s);
+            setInput("field", s);
           }}
-          suggestions={FIELD_OPTIONS}
+          suggestions={OCCUPATION_LABELS}
           hint={
-            fieldValid || fieldBuffer === ""
-              ? undefined
-              : `press one of: ${FIELD_OPTIONS.join(", ")}`
+            fieldUnsourced
+              ? "estimate · v1 — using defaults for income growth and stability."
+              : undefined
           }
         />
       </div>

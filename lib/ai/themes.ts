@@ -31,13 +31,13 @@ export function preambleFor(
     case "support_system":
       return `user lives in ${city}, planning ${inputs.kidsWanted} kids starting at age ${inputs.startAge}. assume no nearby family unless told otherwise.`;
     case "career_tradeoffs":
-      return `${inputs.careerTrack} career in ${inputs.field}, household income $${income}/yr.`;
+      return `${inputs.workIntensity}hr/wk in ${inputs.field}, household income $${income}/yr.`;
     case "regret_horizon":
       return `user is ${inputs.userAge} now, wants ${inputs.kidsWanted} kids beginning at age ${inputs.startAge}. fertility at that start age is ~${fert}%.`;
     case "drift_awareness":
       return `wanted: ${gap.wantedKids} kids at age ${gap.wantedStartAge} (fertility ${gap.fertilityWanted}%). drift puts them at ${gap.likelyKids} kids at age ${gap.driftStartAge} (fertility ${gap.fertilityDrift}%). gap: ${gap.kidGap}.`;
     case "identity_after":
-      return `${inputs.careerTrack} career track in ${inputs.field}; ${inputs.kidsWanted} kids planned starting age ${inputs.startAge}.`;
+      return `${inputs.workIntensity}hr/wk in ${inputs.field}; ${inputs.kidsWanted} kids planned starting age ${inputs.startAge}.`;
     case "the_second_kid":
       return `${inputs.kidsWanted} kids planned. first arrival around age ${inputs.startAge}, second roughly ${inputs.startAge + 3}.`;
   }

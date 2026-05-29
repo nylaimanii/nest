@@ -162,7 +162,7 @@ export const useQuestionsStore = create<QuestionsState>((set, get) => ({
   applySuggestions: () => {
     // snapshot the array first, then iterate EVERY entry — re-read setInput
     // from the live sim store on each iteration so a stale action ref can't
-    // skip a field (kidsWanted vs careerTrack vs startAge all need to land).
+    // skip a field (kidsWanted vs workIntensity vs startAge all need to land).
     const suggestions = get().suggestions;
     for (const s of suggestions) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

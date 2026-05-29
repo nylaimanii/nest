@@ -3,9 +3,9 @@
 // never from the LLM (CLAUDE.md determinism rule).
 
 export type SimInputs = {
-  /** 22–45 */
+  /** 18–55 */
   userAge: number;
-  /** 22–45 or null (single) */
+  /** 18–55 or null (single) */
   partnerAge: number | null;
   /** annual gross, USD */
   householdIncome: number;
@@ -13,19 +13,14 @@ export type SimInputs = {
   city: string;
   /** 0–4 */
   kidsWanted: number;
-  /** 24–42, must be >= userAge */
+  /** 18–102, see RANGES.startAge for the slider window. */
   startAge: number;
-  /** affects earnings shape */
-  careerTrack: "steady" | "ascending" | "demanding";
-  /** field tag — matched against city.careerHubFor in atlas scoring. */
-  field:
-    | "tech"
-    | "finance"
-    | "biotech"
-    | "government"
-    | "manufacturing"
-    | "healthcare"
-    | "creative";
+  /** work hours per week, 30–80. drives the income-growth curve. */
+  workIntensity: number;
+  /** occupation label — matched against lib/sim/fields.ts. free-string; any
+   *  value the user types is accepted, sourced fields look up salary +
+   *  growth + volatility, others fall through to defaults. */
+  field: string;
 };
 
 export type SimSnapshot = {
@@ -52,4 +47,10 @@ export type SimSnapshot = {
   childcareSourced: boolean;
   /** monthly per-kid childcare $ the model used (sourced or fallback estimate). */
   childcareMonthlyUsed: number;
+  /** the resolved occupation label, or the user's raw input when no match. */
+  occupationUsed: string;
+  /** true when the user's field matched the BLS-sourced occupation set. */
+  occupationSourced: boolean;
+  /** stability tier derived from the occupation's volatility. */
+  incomeStability: "high" | "moderate" | "low";
 };

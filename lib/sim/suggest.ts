@@ -45,21 +45,24 @@ export function suggestSimChanges(
     out.push(s);
   };
 
-  // 1) repeated money worry → bump career track up.
+  // 1) repeated money worry → bump work intensity up (capped at 70hrs).
   const moneyHits = history.filter(
     (h) =>
       (h.classification?.stance === "avoidant" ||
         h.classification?.stance === "conflicted") &&
       hasTagMatching(h, MONEY_TAG_RE),
   );
-  if (moneyHits.length >= 2 && inputs.careerTrack !== "demanding") {
-    push({
-      field: "careerTrack",
-      from: inputs.careerTrack,
-      to: "demanding",
-      reason:
-        "you flagged money pressure repeatedly; modeling a more demanding earnings track shows what that path looks like.",
-    });
+  if (moneyHits.length >= 2 && inputs.workIntensity < 60) {
+    const next = Math.min(70, inputs.workIntensity + 15);
+    if (next !== inputs.workIntensity) {
+      push({
+        field: "workIntensity",
+        from: inputs.workIntensity,
+        to: next,
+        reason:
+          "you flagged money pressure repeatedly; modeling more intense work shows what that path looks like.",
+      });
+    }
   }
 
   // 2) support_system answer suggests no backup → fewer kids modeled.

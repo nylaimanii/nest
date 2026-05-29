@@ -1,6 +1,7 @@
 // determinism rule (CLAUDE.md): scores are CODE, never LLM-generated.
 // honest tradeoff strings are templated from the numbers below, not prose.
 
+import { findOccupation } from "@/lib/sim/fields";
 import {
   computeTakeHome,
   stateAbbrevFromCity,
@@ -57,10 +58,19 @@ function greenScore(c: CityRecord): number | null {
   return clamp((c.greenSpacePct / 30) * 100, 0, 100);
 }
 
-/** match → 100; data but no match → 50; no data → null. */
-function careerScore(c: CityRecord, userCareer: string): number | null {
+/**
+ * resolve the user's free-string field to an occupation category (tech,
+ * healthcare, ...) and match against the city's careerHubFor tags. unknown
+ * fields fall through to the raw string so a user typing a category name
+ * directly (e.g. "tech") still scores.
+ *
+ * match → 100; data but no match → 50; no data → null.
+ */
+function careerScore(c: CityRecord, userField: string): number | null {
   if (c.careerHubFor.length === 0) return null;
-  return c.careerHubFor.includes(userCareer) ? 100 : 50;
+  const occ = findOccupation(userField);
+  const category = occ ? occ.category : userField.trim().toLowerCase();
+  return c.careerHubFor.includes(category) ? 100 : 50;
 }
 
 function factorValue(
@@ -103,12 +113,14 @@ function rawFor(c: CityRecord, f: AtlasFactor): string {
 
 // ---- honest tradeoff phrases ----------------------------------------------
 
-function bestPhrase(c: CityRecord, userCareer: string): string | null {
+function bestPhrase(c: CityRecord, userField: string): string | null {
   if (c.schoolScore !== null && c.schoolScore >= 80) return "top schools";
   if (c.greenSpacePct !== null && c.greenSpacePct >= 25)
     return "exceptional green space";
-  if (c.careerHubFor.includes(userCareer))
-    return `career-aligned for ${userCareer}`;
+  const occ = findOccupation(userField);
+  const category = occ ? occ.category : userField.trim().toLowerCase();
+  if (c.careerHubFor.includes(category))
+    return `career-aligned for ${userField}`;
   if (c.safetyScore !== null && c.safetyScore >= 80) return "very safe";
   if (c.costOfLiving !== null && c.costOfLiving <= 95)
     return "affordable for a major metro";

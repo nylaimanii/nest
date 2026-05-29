@@ -1,6 +1,7 @@
 "use client";
 
 import { AtlasCard } from "@/components/atlas/Card";
+import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { Stat } from "@/components/atlas/Stat";
 import { cn } from "@/lib/utils";
 import { isInternational } from "@/lib/sim/tax";
@@ -9,17 +10,28 @@ import { useSimStore } from "@/store/sim";
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
 
+const STABILITY_CLASS: Record<"high" | "moderate" | "low", string> = {
+  high: "text-green",
+  moderate: "text-ink",
+  low: "text-terracotta",
+};
+
 export function HonestPanel() {
   const snap = useSimStore((s) => s.snapshot);
   const international = isInternational(snap.inputs.city);
 
   // childcare provenance tag: SOURCED (in atlas) → green; ESTIMATE → terracotta;
   // INTERNATIONAL → muted (not a hard truth, just a scope note).
-  const tag = international
+  const childcareTag = international
     ? { label: "INTERNATIONAL · V1", tone: "text-muted" }
     : snap.childcareSourced
       ? { label: `SOURCED · ${snap.inputs.city}`, tone: "text-green" }
       : { label: "ESTIMATE · V1", tone: "text-terracotta" };
+
+  const stabilityClass = STABILITY_CLASS[snap.incomeStability];
+  const occTag = snap.occupationSourced
+    ? { label: "SOURCED · BLS", tone: "text-green" }
+    : { label: "ESTIMATE · V1", tone: "text-terracotta" };
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-8">
@@ -54,7 +66,27 @@ export function HonestPanel() {
         <AtlasCard>
           <Stat label="PEAK BURDEN RATIO" value={pct(snap.burdenRatio)} />
         </AtlasCard>
-        <AtlasCard className="col-span-2">
+        <AtlasCard>
+          <div className="flex flex-col gap-2">
+            <MonoLabel>INCOME STABILITY</MonoLabel>
+            <span
+              className={cn("font-mono text-3xl leading-none", stabilityClass)}
+            >
+              {snap.incomeStability.toUpperCase()}
+            </span>
+          </div>
+          <div className="mt-1">
+            <span
+              className={cn(
+                "font-mono text-[0.65rem] uppercase tracking-[0.12em]",
+                occTag.tone,
+              )}
+            >
+              {occTag.label}
+            </span>
+          </div>
+        </AtlasCard>
+        <AtlasCard>
           <Stat
             label="CHILDCARE / MO"
             value={`$${snap.childcareMonthlyUsed.toLocaleString("en-US")}`}
@@ -63,19 +95,18 @@ export function HonestPanel() {
             <span
               className={cn(
                 "font-mono text-[0.65rem] uppercase tracking-[0.12em]",
-                tag.tone,
+                childcareTag.tone,
               )}
             >
-              {tag.label}
+              {childcareTag.label}
             </span>
           </div>
         </AtlasCard>
       </div>
       <p className="font-serif italic text-muted">
-        tax math reflects 2026 us federal brackets + state lookup. city
-        childcare sourced for 20 us metros. fertility curve is reliable for
-        ages 24–42; outside that range we report the boundary value. anything
-        else remains v1 illustrative.
+        tax + occupation data sourced where indicated. fertility curve
+        reliable ages 24–42; outside that range we report the boundary.
+        anything else remains v1 illustrative.
         {international ? (
           <>
             {" "}
