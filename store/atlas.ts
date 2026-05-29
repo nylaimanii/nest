@@ -1,10 +1,13 @@
 import { create } from "zustand";
 
 import {
-  AUSTIN_TX,
-  NEW_YORK_NY,
+  CITIES,
+  findCityByName,
+  makePartialCity,
   type CityRecord,
 } from "@/lib/atlas/cities";
+import { findAlternates } from "@/lib/atlas/alternates";
+import { geocodeCity } from "@/lib/atlas/geocode";
 import {
   scoreCity,
   type AtlasWeights,
@@ -12,29 +15,36 @@ import {
   type ScoreContext,
 } from "@/lib/atlas/score";
 import type { FilingStatus } from "@/lib/sim/tax";
-// reading sim state at action time — atlas scores depend on income + field +
-// filing (partnerAge) + kidsWanted (for CTC in the take-home math).
+// atlas alternates depend on the committed sim inputs (income, field,
+// partnerField, partnerAge, partnerIncome, kidsWanted) — same context the
+// score engine takes.
 import { useSimStore } from "@/store/sim";
 import type { SimInputs } from "@/types";
 
 interface AtlasState {
-  /** what the user is currently tuning — never feeds the scores. */
-  draftWeights: AtlasWeights;
-  /** the committed weights the score table was built against. */
+  /** committed weights — what alternates/scores are computed against. */
   weights: AtlasWeights;
-  /** true when draftWeights differ from weights (RECOMPUTE glows). */
+  /** what the sidebar UI is currently tuning — never feeds scores. */
+  draftWeights: AtlasWeights;
   isWeightsDirty: boolean;
   setDraftWeight: <K extends keyof AtlasWeights>(k: K, v: number) => void;
-  /** copies draftWeights → weights and rebuilds scores against the
-   *  currently-committed sim inputs. called by the page-level RECOMPUTE. */
+  /** commits draftWeights, recomputes alternates against current target +
+   *  sim inputs. clears selectedAlternateId if the selected isn't in the
+   *  new list. */
   recompute: () => void;
 
-  roster: CityRecord[];
-  scores: CityScore[];
-  activeCityId: string | null;
-  addCity: (c: CityRecord) => void;
-  removeCity: (id: string) => void;
-  setActiveCity: (id: string | null) => void;
+  /** the city the user pinned as their target via /simulation. resolves
+   *  from sim.inputs.city via findCityByName first, then /api/geocode for
+   *  partial-data records. null only if both fail. */
+  target: CityRecord | null;
+
+  /** computed alternates from the 20-city pool — ranked highest first. */
+  alternates: CityRecord[];
+
+  /** which alternate the user is currently viewing in the right panel
+   *  (null = viewing target). */
+  selectedAlternateId: string | null;
+  setSelectedAlternateId: (id: string | null) => void;
 }
 
 const DEFAULT_WEIGHTS: AtlasWeights = {
@@ -50,13 +60,14 @@ const DEFAULT_WEIGHTS: AtlasWeights = {
   partnerCareer: 2,
 };
 
-const INITIAL_ROSTER: CityRecord[] = [NEW_YORK_NY, AUSTIN_TX];
-
 function filingFor(inputs: SimInputs): FilingStatus {
   return inputs.partnerAge != null ? "married_jointly" : "single";
 }
 
-function contextFrom(inputs: SimInputs, weights: AtlasWeights): ScoreContext {
+export function contextFrom(
+  inputs: SimInputs,
+  weights: AtlasWeights,
+): ScoreContext {
   return {
     weights,
     userIncome: inputs.householdIncome,
@@ -68,13 +79,14 @@ function contextFrom(inputs: SimInputs, weights: AtlasWeights): ScoreContext {
   };
 }
 
-function recomputeScores(
-  roster: CityRecord[],
+/** target.id-aware score lookup — used by sidebar + right panel to pull
+ *  the target's CityScore without re-scoring redundantly. */
+export function scoreFor(
+  city: CityRecord,
+  inputs: SimInputs,
   weights: AtlasWeights,
-): CityScore[] {
-  const sim = useSimStore.getState();
-  const ctx = contextFrom(sim.inputs, weights);
-  return roster.map((c) => scoreCity(c, ctx));
+): CityScore {
+  return scoreCity(city, contextFrom(inputs, weights));
 }
 
 function weightsEqual(a: AtlasWeights, b: AtlasWeights): boolean {
@@ -85,9 +97,42 @@ function weightsEqual(a: AtlasWeights, b: AtlasWeights): boolean {
   return true;
 }
 
+// resolve sim.inputs.city → CityRecord. local dataset hit wins; otherwise
+// hit /api/geocode for a partial-data record so the map still pins
+// SOMEWHERE for "tokyo, japan"-style international targets.
+async function resolveTarget(cityQuery: string): Promise<CityRecord | null> {
+  const local = findCityByName(cityQuery);
+  if (local) return local;
+  const geo = await geocodeCity(cityQuery);
+  if (!geo) return null;
+  return makePartialCity(geo.name, geo.lat, geo.lng);
+}
+
+function computeAlternates(
+  target: CityRecord | null,
+  weights: AtlasWeights,
+  inputs: SimInputs,
+): CityRecord[] {
+  if (!target) return [];
+  return findAlternates(target, CITIES, contextFrom(inputs, weights));
+}
+
+// ---- initial state ---------------------------------------------------------
+// for the seed render we synchronously resolve "new york, ny" via the local
+// dataset (guaranteed hit) and compute alternates immediately. async path
+// only fires when the user later picks a non-dataset city on /simulation.
+
+const INITIAL_TARGET = findCityByName("new york, ny");
+const INITIAL_INPUTS = useSimStore.getState().inputs;
+const INITIAL_ALTERNATES = computeAlternates(
+  INITIAL_TARGET,
+  DEFAULT_WEIGHTS,
+  INITIAL_INPUTS,
+);
+
 export const useAtlasStore = create<AtlasState>((set) => ({
-  draftWeights: DEFAULT_WEIGHTS,
   weights: DEFAULT_WEIGHTS,
+  draftWeights: DEFAULT_WEIGHTS,
   isWeightsDirty: false,
 
   setDraftWeight: (k, v) =>
@@ -100,68 +145,83 @@ export const useAtlasStore = create<AtlasState>((set) => ({
     }),
 
   recompute: () =>
-    set((state) => ({
-      weights: state.draftWeights,
-      scores: recomputeScores(state.roster, state.draftWeights),
-      isWeightsDirty: false,
-    })),
-
-  roster: INITIAL_ROSTER,
-  scores: recomputeScores(INITIAL_ROSTER, DEFAULT_WEIGHTS),
-  activeCityId: "new-york-ny",
-
-  addCity: (c) =>
     set((state) => {
-      // idempotent on duplicate id — just activate the existing row.
-      if (state.roster.some((r) => r.id === c.id)) {
-        return { activeCityId: c.id };
-      }
-      const roster = [...state.roster, c];
+      const inputs = useSimStore.getState().inputs;
+      const alternates = computeAlternates(
+        state.target,
+        state.draftWeights,
+        inputs,
+      );
+      const stillSelected =
+        state.selectedAlternateId !== null &&
+        alternates.some((a) => a.id === state.selectedAlternateId);
       return {
-        roster,
-        scores: recomputeScores(roster, state.weights),
-        activeCityId: c.id,
+        weights: state.draftWeights,
+        alternates,
+        selectedAlternateId: stillSelected ? state.selectedAlternateId : null,
+        isWeightsDirty: false,
       };
     }),
 
-  removeCity: (id) =>
-    set((state) => {
-      const roster = state.roster.filter((r) => r.id !== id);
-      const activeCityId =
-        state.activeCityId === id
-          ? (roster[0]?.id ?? null)
-          : state.activeCityId;
-      return {
-        roster,
-        activeCityId,
-        scores: recomputeScores(roster, state.weights),
-      };
-    }),
+  target: INITIAL_TARGET,
+  alternates: INITIAL_ALTERNATES,
+  selectedAlternateId: null,
 
-  setActiveCity: (id) => set({ activeCityId: id }),
+  setSelectedAlternateId: (id) => set({ selectedAlternateId: id }),
 }));
 
-// committed sim → atlas sync. when /simulation RECOMPUTE commits new
-// inputs (income / field / partnerField / partnerAge / partnerIncome /
-// kidsWanted), rebuild atlas scores against the current roster +
-// committed weights. zustand v5 vanilla subscribe gives (state, prev).
+// ---- sim → atlas sync ------------------------------------------------------
+// when COMMITTED sim inputs change (post-RECOMPUTE), either:
+//   1. inputs.city changed → resolve a new target (async if non-dataset),
+//      then recompute alternates against the new target + current weights
+//   2. only context fields changed (income/field/partner/etc) → keep the
+//      same target, just recompute alternates
+// the subscribe is sync; the async geocode path uses fire-and-forget +
+// setState when it returns.
+
 useSimStore.subscribe((state, prev) => {
   const a = state.inputs;
   const b = prev.inputs;
-  if (
-    a.householdIncome === b.householdIncome &&
-    a.field === b.field &&
-    a.partnerAge === b.partnerAge &&
-    a.partnerIncome === b.partnerIncome &&
-    a.partnerField === b.partnerField &&
-    a.kidsWanted === b.kidsWanted
-  ) {
+  const cityChanged = a.city !== b.city;
+  const ctxChanged =
+    a.householdIncome !== b.householdIncome ||
+    a.partnerIncome !== b.partnerIncome ||
+    a.field !== b.field ||
+    a.partnerField !== b.partnerField ||
+    a.partnerAge !== b.partnerAge ||
+    a.kidsWanted !== b.kidsWanted;
+
+  if (!cityChanged && !ctxChanged) return;
+
+  if (cityChanged) {
+    resolveTarget(a.city)
+      .then((target) => {
+        const atlas = useAtlasStore.getState();
+        const alternates = computeAlternates(target, atlas.weights, a);
+        const stillSelected =
+          atlas.selectedAlternateId !== null &&
+          alternates.some((alt) => alt.id === atlas.selectedAlternateId);
+        useAtlasStore.setState({
+          target,
+          alternates,
+          selectedAlternateId: stillSelected ? atlas.selectedAlternateId : null,
+        });
+      })
+      .catch(() => {
+        // resolveTarget already swallows geocode errors and returns null;
+        // this catch is just belt-and-suspenders so a thrown error from
+        // findAlternates/setState can't poison the subscribe.
+      });
     return;
   }
+
   const atlas = useAtlasStore.getState();
+  const alternates = computeAlternates(atlas.target, atlas.weights, a);
+  const stillSelected =
+    atlas.selectedAlternateId !== null &&
+    alternates.some((alt) => alt.id === atlas.selectedAlternateId);
   useAtlasStore.setState({
-    scores: atlas.roster.map((c) =>
-      scoreCity(c, contextFrom(state.inputs, atlas.weights)),
-    ),
+    alternates,
+    selectedAlternateId: stillSelected ? atlas.selectedAlternateId : null,
   });
 });

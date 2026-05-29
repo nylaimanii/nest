@@ -1,8 +1,8 @@
 import { MonoLabel } from "@/components/atlas";
 import { AtlasMap } from "@/components/atlas/AtlasMap";
+import { AtlasSidebar } from "@/components/atlas/AtlasSidebar";
 import { CityHonestPanel } from "@/components/atlas/CityHonestPanel";
 import { RecomputeButton } from "@/components/atlas/RecomputeButton";
-import { RosterList } from "@/components/atlas/RosterList";
 
 export default function AtlasViewPage() {
   return (
@@ -14,14 +14,14 @@ export default function AtlasViewPage() {
             atlas
           </h1>
           <p className="font-serif italic text-muted">
-            the places, scored honestly — not just happily.
+            find cities that match what your family needs.
           </p>
         </div>
         <RecomputeButton />
       </div>
 
       <div className="grid grid-cols-[280px_minmax(640px,1fr)_420px] gap-0">
-        <RosterList />
+        <AtlasSidebar />
         <div className="min-h-[560px] border-x border-line">
           <AtlasMap />
         </div>
