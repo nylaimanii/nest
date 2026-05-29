@@ -148,9 +148,10 @@ export function HonestPanel() {
         </AtlasCard>
       </div>
       <p className="font-serif italic text-muted">
-        tax + occupation data sourced where indicated. fertility curve
-        reliable ages 24–42; outside that range we report the boundary.
-        anything else remains v1 illustrative.
+        data sourced for the 20 us metros below. weather and community size
+        are preference factors — there's no objectively-better value, only
+        what fits your family. anything tagged ESTIMATE · V1 is illustrative
+        until we expand the dataset.
         {international ? (
           <>
             {" "}

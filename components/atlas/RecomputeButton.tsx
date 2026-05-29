@@ -1,22 +1,35 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useAtlasStore } from "@/store/atlas";
 import { useSimStore } from "@/store/sim";
 
 /**
- * the explicit compute trigger for /simulation and /atlas-view. inputs no
- * longer recompute on every keystroke — the user types whatever they want
- * into draftInputs, then this button commits draft → inputs and re-runs
- * the engine in one tick.
+ * the explicit compute trigger for /simulation and /atlas-view. neither
+ * sim inputs nor atlas weights recompute on every keystroke now — the user
+ * edits drafts freely, then this button commits BOTH the sim draft and the
+ * atlas weights draft in one tick.
  *
- * isDirty drives the glow: green ring + "INPUTS CHANGED · CLICK TO RUN"
- * when draft != committed, plain muted "MODEL IS UP TO DATE" otherwise.
- * the button stays clickable in both states — clicking when clean just
- * runs the engine over the same inputs (idempotent, harmless).
+ * isDirty drives the glow: any unsaved draft (sim OR atlas weights) →
+ * green ring + "INPUTS CHANGED · CLICK TO RUN"; otherwise plain muted
+ * "MODEL IS UP TO DATE". the button stays clickable in both states —
+ * clicking when clean just runs both engines over the same state.
  */
 export function RecomputeButton() {
-  const isDirty = useSimStore((s) => s.isDirty);
-  const recompute = useSimStore((s) => s.recompute);
+  const simDirty = useSimStore((s) => s.isDirty);
+  const weightsDirty = useAtlasStore((s) => s.isWeightsDirty);
+  const recomputeSim = useSimStore((s) => s.recompute);
+  const recomputeAtlas = useAtlasStore((s) => s.recompute);
+
+  const isDirty = simDirty || weightsDirty;
+
+  function handleClick() {
+    // sim recompute first so the atlas store's subscribe sees the new
+    // committed inputs; then atlas recompute picks up any draft weight
+    // changes alongside the fresh inputs.
+    recomputeSim();
+    recomputeAtlas();
+  }
 
   return (
     <div className="flex items-center justify-end gap-4">
@@ -30,7 +43,7 @@ export function RecomputeButton() {
       </span>
       <button
         type="button"
-        onClick={recompute}
+        onClick={handleClick}
         className={cn(
           "border-2 border-green bg-bone px-8 py-3 font-mono text-[0.85rem] uppercase tracking-[0.15em] text-green transition-colors hover:bg-green hover:text-bone",
           isDirty && "ring-2 ring-green/30",

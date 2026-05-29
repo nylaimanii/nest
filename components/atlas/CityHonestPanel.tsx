@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAtlasStore } from "@/store/atlas";
 import { useSimStore } from "@/store/sim";
 import type { AtlasFactor, CityScore } from "@/lib/atlas/score";
-import type { CityRecord } from "@/lib/atlas/cities";
+import { PREFERENCE_FACTORS } from "@/lib/atlas/score";
 
 import { MonoLabel } from "./MonoLabel";
 
@@ -14,8 +14,11 @@ const NEUTRAL_HIGH = 75;
 
 type DotTone = "green" | "terracotta" | "ink" | "muted" | "none";
 
-/** higher-better value (0–100) + user weight (0–5) → dot tone. */
-function toneFor(value: number | null, weight: number): DotTone {
+/**
+ * objective factors: better is objectively better, dot encodes that with
+ * a value judgement when the user cares (weight ≥ 4).
+ */
+function objectiveTone(value: number | null, weight: number): DotTone {
   if (value === null) return "none";
   if (weight >= 4 && value >= NEUTRAL_HIGH) return "green";
   if (weight >= 4 && value <= NEUTRAL_LOW) return "terracotta";
@@ -23,13 +26,30 @@ function toneFor(value: number | null, weight: number): DotTone {
   return "ink";
 }
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.min(Math.max(n, lo), hi);
+/**
+ * preference factors (communitySize, weather): there's no "better" — just
+ * "more of the trait" (smaller/larger metro; sunny/gray). when the user
+ * cares (weight ≥ 4) the dot still flips to green when the city matches
+ * the high end of the trait scale and terracotta on the low end — but the
+ * label below makes clear this is descriptive, not value-judgmental.
+ * when weight ≤ 1 it stays muted; otherwise neutral ink.
+ */
+function preferenceTone(value: number | null, weight: number): DotTone {
+  if (value === null) return "none";
+  if (weight <= 1) return "muted";
+  if (weight >= 4 && value >= NEUTRAL_HIGH) return "green";
+  if (weight >= 4 && value <= NEUTRAL_LOW) return "terracotta";
+  return "ink";
 }
 
-/** lower-better USD stat → 0–100 higher-better score, given a sensible range. */
-function inverseScore(value: number, lo: number, hi: number): number {
-  return clamp(100 - ((value - lo) / (hi - lo)) * 100, 0, 100);
+function toneFor(
+  factor: AtlasFactor,
+  value: number | null,
+  weight: number,
+): DotTone {
+  return PREFERENCE_FACTORS.has(factor)
+    ? preferenceTone(value, weight)
+    : objectiveTone(value, weight);
 }
 
 function splitNameForState(name: string) {
@@ -112,96 +132,115 @@ function Section({
 interface RowInput {
   factor: AtlasFactor;
   label: string;
-  value: number | null;
   raw: string;
 }
 
 function buildRows(
-  c: CityRecord,
   score: CityScore,
-  field: string,
-  takeHomePct: number | null,
+  userField: string,
+  partnerField: string | null,
+  totalIncome: number,
 ): { forKid: RowInput[]; forFamily: RowInput[]; forYou: RowInput[] } {
+  const c = score.city;
+  const pf = score.perFactor;
+
+  // FOR THE KID — three objective rows plus the preference row for community.
   const forKid: RowInput[] = [
     {
       factor: "schools",
       label: "schools",
-      value: score.perFactor.schools.value,
-      raw: c.schoolScore === null ? DASH : String(c.schoolScore),
+      raw: c.schoolScore === null ? DASH : `${c.schoolScore}/100`,
     },
     {
       factor: "safety",
       label: "safety",
-      value: score.perFactor.safety.value,
-      raw: c.safetyScore === null ? DASH : String(c.safetyScore),
+      raw: c.safetyScore === null ? DASH : `${c.safetyScore}/100`,
     },
     {
       factor: "greenSpace",
       label: "green space",
-      value: score.perFactor.greenSpace.value,
       raw: c.greenSpacePct === null ? DASH : `${c.greenSpacePct}%`,
+    },
+    {
+      // preference factor: rawFor() in score.ts already returns the
+      // descriptive label ("strong community feel", etc).
+      factor: "communitySize",
+      label: "community",
+      raw: pf.communitySize.raw,
     },
   ];
 
-  // FOR THE FAMILY: cost-related rows all read the "cost" weight so the user's
-  // single "cost matters?" preference governs them together.
-  const rentValue =
-    c.medianRent2BR === null ? null : inverseScore(c.medianRent2BR, 1500, 5000);
-  const childcareValue =
-    c.childcareMonthly === null
-      ? null
-      : inverseScore(c.childcareMonthly, 1200, 3000);
+  // FOR THE FAMILY — cost of living + the two derived burdens + weather.
+  // the rent ratio + childcare burden % are descriptive UI labels; the
+  // score engine has its own precise take-home math. for the label we use
+  // a 0.76 take-home approximation to keep this row cheap — the scoring
+  // total (and the SOURCED tags) reflect the precise number.
+  const rentDisplay =
+    c.medianRent2BR === null || totalIncome <= 0
+      ? DASH
+      : `${Math.round(((c.medianRent2BR * 12) / totalIncome) * 100)}% of income`;
+  const childcareDisplay =
+    c.childcareMonthly === null || totalIncome <= 0
+      ? DASH
+      : `${Math.round(((c.childcareMonthly * 12) / (totalIncome * 0.76)) * 100)}% of take-home`;
+
   const forFamily: RowInput[] = [
     {
       factor: "cost",
       label: "cost of living",
-      value: score.perFactor.cost.value,
-      raw: c.costOfLiving === null ? DASH : `${c.costOfLiving} index`,
+      raw: c.costOfLiving === null ? DASH : `${c.costOfLiving} (us avg 100)`,
     },
     {
-      factor: "cost",
-      label: "median rent (2BR)",
-      value: rentValue,
-      raw:
-        c.medianRent2BR === null
-          ? DASH
-          : `$${c.medianRent2BR.toLocaleString("en-US")}/mo`,
+      factor: "rentBurden",
+      label: "rent burden",
+      raw: rentDisplay,
     },
     {
-      factor: "cost",
-      label: "childcare per kid",
-      value: childcareValue,
+      factor: "childcareCost",
+      label: "childcare burden",
+      raw: childcareDisplay,
+    },
+    {
+      factor: "weather",
+      label: "weather",
       raw:
-        c.childcareMonthly === null
+        c.annualSunnyDays === null
           ? DASH
-          : `$${c.childcareMonthly.toLocaleString("en-US")}/mo`,
+          : `${c.annualSunnyDays} sunny days/yr`,
     },
   ];
 
-  // FOR YOU: career fit + the financial breathing-room signal.
-  // careerScore returns 100 on match, 50 on data-but-no-match — so the
-  // dot logic in toneFor already does the right thing (≥75 green, ≤50
-  // terracotta when the user cares).
-  const careerRaw =
+  // FOR YOU — career fit always, partner career only when partner exists.
+  const userCareerDisplay =
     c.careerHubFor.length === 0
       ? DASH
-      : c.careerHubFor.includes(field)
-        ? `${field} (matches)`
-        : `not a ${field} hub — ${c.careerHubFor.join(", ")}`;
+      : `${userField} → ${
+          pf.careerFit.value !== null && pf.careerFit.value >= 100
+            ? "match"
+            : "no match"
+        }`;
   const forYou: RowInput[] = [
     {
       factor: "careerFit",
       label: "career fit",
-      value: score.perFactor.careerFit.value,
-      raw: careerRaw,
-    },
-    {
-      factor: "cost",
-      label: "take-home after childcare",
-      value: takeHomePct,
-      raw: takeHomePct === null ? DASH : `${takeHomePct}%`,
+      raw: userCareerDisplay,
     },
   ];
+  if (partnerField !== null) {
+    const partnerCareerDisplay =
+      c.careerHubFor.length === 0
+        ? DASH
+        : `${partnerField} → ${
+            pf.partnerCareer.value !== null && pf.partnerCareer.value >= 100
+              ? "match"
+              : "no match"
+          }`;
+    forYou.push({
+      factor: "partnerCareer",
+      label: "partner career",
+      raw: partnerCareerDisplay,
+    });
+  }
 
   return { forKid, forFamily, forYou };
 }
@@ -210,8 +249,11 @@ export function CityHonestPanel() {
   const activeCityId = useAtlasStore((s) => s.activeCityId);
   const scores = useAtlasStore((s) => s.scores);
   const weights = useAtlasStore((s) => s.weights);
-  const income = useSimStore((s) => s.inputs.householdIncome);
-  const field = useSimStore((s) => s.inputs.field);
+  const userField = useSimStore((s) => s.inputs.field);
+  const partnerField = useSimStore((s) => s.inputs.partnerField);
+  const userIncome = useSimStore((s) => s.inputs.householdIncome);
+  const partnerIncome = useSimStore((s) => s.inputs.partnerIncome);
+  const totalIncome = userIncome + (partnerIncome ?? 0);
 
   const score = scores.find((s) => s.city.id === activeCityId);
   if (!score) {
@@ -239,11 +281,12 @@ export function CityHonestPanel() {
         ? "terracotta"
         : "ink";
 
-  const takeHomePct = c.takeHomeAfterChildcarePct
-    ? c.takeHomeAfterChildcarePct(income)
-    : null;
-
-  const { forKid, forFamily, forYou } = buildRows(c, score, field, takeHomePct);
+  const { forKid, forFamily, forYou } = buildRows(
+    score,
+    userField,
+    partnerField,
+    totalIncome,
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-7 overflow-y-auto p-8">
@@ -289,7 +332,11 @@ export function CityHonestPanel() {
             key={r.label}
             label={r.label}
             raw={r.raw}
-            tone={toneFor(r.value, weights[r.factor])}
+            tone={toneFor(
+              r.factor,
+              score.perFactor[r.factor].value,
+              weights[r.factor],
+            )}
             weight={weights[r.factor]}
           />
         ))}
@@ -301,7 +348,11 @@ export function CityHonestPanel() {
             key={r.label}
             label={r.label}
             raw={r.raw}
-            tone={toneFor(r.value, weights[r.factor])}
+            tone={toneFor(
+              r.factor,
+              score.perFactor[r.factor].value,
+              weights[r.factor],
+            )}
             weight={weights[r.factor]}
           />
         ))}
@@ -313,14 +364,21 @@ export function CityHonestPanel() {
             key={r.label}
             label={r.label}
             raw={r.raw}
-            tone={toneFor(r.value, weights[r.factor])}
+            tone={toneFor(
+              r.factor,
+              score.perFactor[r.factor].value,
+              weights[r.factor],
+            )}
             weight={weights[r.factor]}
           />
         ))}
       </Section>
 
       <p className="font-serif italic text-muted">
-        scores are v1 illustrative — sourced atlas lands later.
+        data sourced for the 20 us metros below. weather and community size
+        are preference factors — there's no objectively-better value, only
+        what fits your family. anything tagged ESTIMATE · V1 is illustrative
+        until we expand the dataset.
       </p>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   scoreCity,
   type AtlasWeights,
   type CityScore,
+  type ScoreContext,
 } from "@/lib/atlas/score";
 import type { FilingStatus } from "@/lib/sim/tax";
 // reading sim state at action time — atlas scores depend on income + field +
@@ -17,8 +18,17 @@ import { useSimStore } from "@/store/sim";
 import type { SimInputs } from "@/types";
 
 interface AtlasState {
+  /** what the user is currently tuning — never feeds the scores. */
+  draftWeights: AtlasWeights;
+  /** the committed weights the score table was built against. */
   weights: AtlasWeights;
-  setWeight: <K extends keyof AtlasWeights>(k: K, v: number) => void;
+  /** true when draftWeights differ from weights (RECOMPUTE glows). */
+  isWeightsDirty: boolean;
+  setDraftWeight: <K extends keyof AtlasWeights>(k: K, v: number) => void;
+  /** copies draftWeights → weights and rebuilds scores against the
+   *  currently-committed sim inputs. called by the page-level RECOMPUTE. */
+  recompute: () => void;
+
   roster: CityRecord[];
   scores: CityScore[];
   activeCityId: string | null;
@@ -29,10 +39,15 @@ interface AtlasState {
 
 const DEFAULT_WEIGHTS: AtlasWeights = {
   schools: 4,
-  cost: 3,
   safety: 3,
   greenSpace: 2,
+  communitySize: 0,
+  cost: 3,
+  rentBurden: 3,
+  childcareCost: 3,
+  weather: 0,
   careerFit: 3,
+  partnerCareer: 2,
 };
 
 const INITIAL_ROSTER: CityRecord[] = [NEW_YORK_NY, AUSTIN_TX];
@@ -41,33 +56,58 @@ function filingFor(inputs: SimInputs): FilingStatus {
   return inputs.partnerAge != null ? "married_jointly" : "single";
 }
 
-function recompute(
+function contextFrom(inputs: SimInputs, weights: AtlasWeights): ScoreContext {
+  return {
+    weights,
+    userIncome: inputs.householdIncome,
+    partnerIncome: inputs.partnerIncome,
+    userField: inputs.field,
+    partnerField: inputs.partnerField,
+    filing: filingFor(inputs),
+    kidsWanted: inputs.kidsWanted,
+  };
+}
+
+function recomputeScores(
   roster: CityRecord[],
   weights: AtlasWeights,
 ): CityScore[] {
   const sim = useSimStore.getState();
-  return roster.map((c) =>
-    scoreCity(
-      c,
-      weights,
-      sim.inputs.householdIncome,
-      sim.inputs.field,
-      filingFor(sim.inputs),
-      sim.inputs.kidsWanted,
-    ),
-  );
+  const ctx = contextFrom(sim.inputs, weights);
+  return roster.map((c) => scoreCity(c, ctx));
+}
+
+function weightsEqual(a: AtlasWeights, b: AtlasWeights): boolean {
+  const keys = Object.keys(a) as (keyof AtlasWeights)[];
+  for (const k of keys) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
 }
 
 export const useAtlasStore = create<AtlasState>((set) => ({
+  draftWeights: DEFAULT_WEIGHTS,
   weights: DEFAULT_WEIGHTS,
-  setWeight: (k, v) =>
+  isWeightsDirty: false,
+
+  setDraftWeight: (k, v) =>
     set((state) => {
-      const weights = { ...state.weights, [k]: v };
-      return { weights, scores: recompute(state.roster, weights) };
+      const draftWeights = { ...state.draftWeights, [k]: v };
+      return {
+        draftWeights,
+        isWeightsDirty: !weightsEqual(draftWeights, state.weights),
+      };
     }),
 
+  recompute: () =>
+    set((state) => ({
+      weights: state.draftWeights,
+      scores: recomputeScores(state.roster, state.draftWeights),
+      isWeightsDirty: false,
+    })),
+
   roster: INITIAL_ROSTER,
-  scores: recompute(INITIAL_ROSTER, DEFAULT_WEIGHTS),
+  scores: recomputeScores(INITIAL_ROSTER, DEFAULT_WEIGHTS),
   activeCityId: "new-york-ny",
 
   addCity: (c) =>
@@ -79,7 +119,7 @@ export const useAtlasStore = create<AtlasState>((set) => ({
       const roster = [...state.roster, c];
       return {
         roster,
-        scores: recompute(roster, state.weights),
+        scores: recomputeScores(roster, state.weights),
         activeCityId: c.id,
       };
     }),
@@ -94,39 +134,34 @@ export const useAtlasStore = create<AtlasState>((set) => ({
       return {
         roster,
         activeCityId,
-        scores: recompute(roster, state.weights),
+        scores: recomputeScores(roster, state.weights),
       };
     }),
 
   setActiveCity: (id) => set({ activeCityId: id }),
 }));
 
-// live sim → atlas sync: changes to income / field / partnerAge / kidsWanted
-// in the sim store rebuild atlas scores against the current roster + weights,
-// so dragging any of those on /simulation updates the atlas right-panel
-// numbers (income, filing status, and CTC eligibility all feed take-home in
-// scoreCity's worstPhrase). zustand v5 vanilla subscribe gives (state, prev);
-// we diff manually instead of pulling in subscribeWithSelector middleware.
+// committed sim → atlas sync. when /simulation RECOMPUTE commits new
+// inputs (income / field / partnerField / partnerAge / partnerIncome /
+// kidsWanted), rebuild atlas scores against the current roster +
+// committed weights. zustand v5 vanilla subscribe gives (state, prev).
 useSimStore.subscribe((state, prev) => {
+  const a = state.inputs;
+  const b = prev.inputs;
   if (
-    state.inputs.householdIncome === prev.inputs.householdIncome &&
-    state.inputs.field === prev.inputs.field &&
-    state.inputs.partnerAge === prev.inputs.partnerAge &&
-    state.inputs.kidsWanted === prev.inputs.kidsWanted
+    a.householdIncome === b.householdIncome &&
+    a.field === b.field &&
+    a.partnerAge === b.partnerAge &&
+    a.partnerIncome === b.partnerIncome &&
+    a.partnerField === b.partnerField &&
+    a.kidsWanted === b.kidsWanted
   ) {
     return;
   }
   const atlas = useAtlasStore.getState();
   useAtlasStore.setState({
     scores: atlas.roster.map((c) =>
-      scoreCity(
-        c,
-        atlas.weights,
-        state.inputs.householdIncome,
-        state.inputs.field,
-        filingFor(state.inputs),
-        state.inputs.kidsWanted,
-      ),
+      scoreCity(c, contextFrom(state.inputs, atlas.weights)),
     ),
   });
 });

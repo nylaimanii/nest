@@ -3,19 +3,48 @@
 import { X } from "lucide-react";
 
 import { AtlasImportance } from "@/components/atlas/AtlasImportance";
-import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { CitySearch } from "@/components/atlas/CitySearch";
+import { MonoLabel } from "@/components/atlas/MonoLabel";
 import { cn } from "@/lib/utils";
 import { useAtlasStore } from "@/store/atlas";
+import { useSimStore } from "@/store/sim";
 import type { AtlasWeights } from "@/lib/atlas/score";
 
-const WEIGHT_ROWS: { key: keyof AtlasWeights; label: string }[] = [
+interface WeightRow {
+  key: keyof AtlasWeights;
+  label: string;
+}
+
+const KID_ROWS: WeightRow[] = [
   { key: "schools", label: "schools" },
-  { key: "cost", label: "cost" },
   { key: "safety", label: "safety" },
   { key: "greenSpace", label: "green space" },
+  { key: "communitySize", label: "community size" },
+];
+
+const FAMILY_ROWS: WeightRow[] = [
+  { key: "cost", label: "cost of living" },
+  { key: "rentBurden", label: "rent burden" },
+  { key: "childcareCost", label: "childcare cost" },
+  { key: "weather", label: "weather" },
+];
+
+const YOU_ROWS: WeightRow[] = [
   { key: "careerFit", label: "career fit" },
 ];
+
+const PARTNER_CAREER_ROW: WeightRow = {
+  key: "partnerCareer",
+  label: "partner career",
+};
+
+function SubHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-2 mb-1 font-mono text-[0.6rem] uppercase tracking-[0.15em] text-muted">
+      {children}
+    </div>
+  );
+}
 
 export function RosterList() {
   const roster = useAtlasStore((s) => s.roster);
@@ -23,11 +52,19 @@ export function RosterList() {
   const activeCityId = useAtlasStore((s) => s.activeCityId);
   const setActiveCity = useAtlasStore((s) => s.setActiveCity);
   const removeCity = useAtlasStore((s) => s.removeCity);
-  const weights = useAtlasStore((s) => s.weights);
-  const setWeight = useAtlasStore((s) => s.setWeight);
+  // draftWeights drive the UI; the committed `weights` only matter to
+  // scoreCity, which runs on RECOMPUTE.
+  const draftWeights = useAtlasStore((s) => s.draftWeights);
+  const setDraftWeight = useAtlasStore((s) => s.setDraftWeight);
+  // PARTNER CAREER appears only when the user actually has a partner — read
+  // from committed inputs so toggling partner on /simulation requires a
+  // recompute to reveal the weight row (consistent with the rest of the UI).
+  const hasPartner = useSimStore((s) => s.inputs.partnerAge !== null);
+
+  const youRows = hasPartner ? [...YOU_ROWS, PARTNER_CAREER_ROW] : YOU_ROWS;
 
   return (
-    <aside className="flex w-[280px] flex-col gap-6 border-r border-line p-6">
+    <aside className="flex max-h-[calc(100vh-200px)] w-[280px] flex-col gap-6 overflow-y-auto border-r border-line p-6">
       <CitySearch />
 
       <div className="flex flex-col gap-3">
@@ -44,8 +81,6 @@ export function RosterList() {
                 <button
                   type="button"
                   onClick={() => setActiveCity(c.id)}
-                  // every row keeps the same border-width so activate
-                  // only swaps the border color — no horizontal shift.
                   className={cn(
                     "flex min-w-0 flex-1 items-baseline justify-between border-l-2 py-1 pl-3 pr-1 text-left",
                     active
@@ -90,16 +125,44 @@ export function RosterList() {
         </ul>
       </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
         <MonoLabel>WHAT MATTERS TO YOU</MonoLabel>
-        {WEIGHT_ROWS.map(({ key, label }) => (
-          <AtlasImportance
-            key={key}
-            label={label}
-            value={weights[key]}
-            onChange={(v) => setWeight(key, v)}
-          />
-        ))}
+
+        <SubHeading>FOR THE KID</SubHeading>
+        <div className="flex flex-col gap-4">
+          {KID_ROWS.map(({ key, label }) => (
+            <AtlasImportance
+              key={key}
+              label={label}
+              value={draftWeights[key]}
+              onChange={(v) => setDraftWeight(key, v)}
+            />
+          ))}
+        </div>
+
+        <SubHeading>FOR THE FAMILY</SubHeading>
+        <div className="flex flex-col gap-4">
+          {FAMILY_ROWS.map(({ key, label }) => (
+            <AtlasImportance
+              key={key}
+              label={label}
+              value={draftWeights[key]}
+              onChange={(v) => setDraftWeight(key, v)}
+            />
+          ))}
+        </div>
+
+        <SubHeading>FOR YOU</SubHeading>
+        <div className="flex flex-col gap-4">
+          {youRows.map(({ key, label }) => (
+            <AtlasImportance
+              key={key}
+              label={label}
+              value={draftWeights[key]}
+              onChange={(v) => setDraftWeight(key, v)}
+            />
+          ))}
+        </div>
       </div>
 
       <p className="mt-auto font-serif text-[0.85rem] italic text-muted">

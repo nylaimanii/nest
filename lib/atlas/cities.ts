@@ -23,6 +23,13 @@ export type CityRecord = {
   takeHomeAfterChildcarePct: ((income: number) => number) | null;
   /** career hub tags this metro tends to win on. empty for partial-data cities. */
   careerHubFor: string[];
+  /** city-proper population — US Census Bureau estimates. preference factor:
+   *  smaller cities have a stronger community feel; larger metros surface
+   *  more opportunity. neither is objectively better. */
+  metroPopulation: number | null;
+  /** approximate sunny days per year, from NOAA/NWS averages. preference
+   *  factor — sunny vs gray is taste, not better/worse. */
+  annualSunnyDays: number | null;
 };
 
 // flat 24% effective tax (mirrors lib/sim/model.ts TAX_RATE).
@@ -64,6 +71,8 @@ export const NEW_YORK_NY = city({
   greenSpacePct: 14,
   childcareMonthly: 2400,
   careerHubFor: ["finance", "tech", "creative", "healthcare"],
+  metroPopulation: 8400000,
+  annualSunnyDays: 224,
 });
 
 export const AUSTIN_TX = city({
@@ -78,6 +87,8 @@ export const AUSTIN_TX = city({
   greenSpacePct: 10,
   childcareMonthly: 1500,
   careerHubFor: ["tech", "creative"],
+  metroPopulation: 950000,
+  annualSunnyDays: 228,
 });
 
 export const CITIES: CityRecord[] = [
@@ -94,6 +105,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 13,
     childcareMonthly: 2100,
     careerHubFor: ["creative", "tech", "healthcare"],
+    metroPopulation: 3970000,
+    annualSunnyDays: 284,
   }),
   city({
     id: "san-francisco-ca",
@@ -107,6 +120,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 17,
     childcareMonthly: 2800,
     careerHubFor: ["tech", "biotech", "finance"],
+    metroPopulation: 873000,
+    annualSunnyDays: 256,
   }),
   city({
     id: "boston-ma",
@@ -120,6 +135,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 18,
     childcareMonthly: 2500,
     careerHubFor: ["biotech", "healthcare", "finance"],
+    metroPopulation: 650000,
+    annualSunnyDays: 200,
   }),
   city({
     id: "washington-dc",
@@ -133,6 +150,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 22,
     childcareMonthly: 2300,
     careerHubFor: ["government", "tech"],
+    metroPopulation: 712000,
+    annualSunnyDays: 201,
   }),
   AUSTIN_TX,
   city({
@@ -147,6 +166,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 9,
     childcareMonthly: 1400,
     careerHubFor: ["finance", "tech", "healthcare"],
+    metroPopulation: 1340000,
+    annualSunnyDays: 232,
   }),
   city({
     id: "houston-tx",
@@ -160,6 +181,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 8,
     childcareMonthly: 1300,
     careerHubFor: ["healthcare", "manufacturing"],
+    metroPopulation: 2280000,
+    annualSunnyDays: 204,
   }),
   city({
     id: "atlanta-ga",
@@ -173,6 +196,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 28,
     childcareMonthly: 1400,
     careerHubFor: ["tech", "creative", "healthcare"],
+    metroPopulation: 488000,
+    annualSunnyDays: 217,
   }),
   city({
     id: "miami-fl",
@@ -186,6 +211,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 12,
     childcareMonthly: 1800,
     careerHubFor: ["finance", "creative"],
+    metroPopulation: 440000,
+    annualSunnyDays: 248,
   }),
   city({
     id: "chicago-il",
@@ -199,6 +226,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 8,
     childcareMonthly: 2000,
     careerHubFor: ["finance", "tech", "manufacturing"],
+    metroPopulation: 2740000,
+    annualSunnyDays: 189,
   }),
   city({
     id: "minneapolis-mn",
@@ -212,6 +241,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 17,
     childcareMonthly: 1700,
     careerHubFor: ["healthcare", "finance", "manufacturing"],
+    metroPopulation: 430000,
+    annualSunnyDays: 198,
   }),
   city({
     id: "denver-co",
@@ -225,6 +256,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 11,
     childcareMonthly: 1800,
     careerHubFor: ["tech", "healthcare"],
+    metroPopulation: 710000,
+    annualSunnyDays: 245,
   }),
   city({
     id: "boulder-co",
@@ -238,6 +271,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 32,
     childcareMonthly: 1900,
     careerHubFor: ["tech", "biotech"],
+    metroPopulation: 108000,
+    annualSunnyDays: 245,
   }),
   city({
     id: "raleigh-nc",
@@ -251,6 +286,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 14,
     childcareMonthly: 1500,
     careerHubFor: ["tech", "biotech", "healthcare"],
+    metroPopulation: 470000,
+    annualSunnyDays: 213,
   }),
   city({
     id: "pittsburgh-pa",
@@ -264,6 +301,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 13,
     childcareMonthly: 1500,
     careerHubFor: ["tech", "healthcare", "manufacturing"],
+    metroPopulation: 303000,
+    annualSunnyDays: 157,
   }),
   city({
     id: "portland-or",
@@ -277,6 +316,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 18,
     childcareMonthly: 1900,
     careerHubFor: ["tech", "creative"],
+    metroPopulation: 652000,
+    annualSunnyDays: 144,
   }),
   city({
     id: "seattle-wa",
@@ -290,6 +331,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 16,
     childcareMonthly: 2400,
     careerHubFor: ["tech", "biotech"],
+    metroPopulation: 750000,
+    annualSunnyDays: 152,
   }),
   city({
     id: "columbus-oh",
@@ -303,6 +346,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 12,
     childcareMonthly: 1400,
     careerHubFor: ["healthcare", "manufacturing"],
+    metroPopulation: 907000,
+    annualSunnyDays: 178,
   }),
   city({
     id: "kansas-city-mo",
@@ -316,6 +361,8 @@ export const CITIES: CityRecord[] = [
     greenSpacePct: 13,
     childcareMonthly: 1300,
     careerHubFor: ["healthcare", "manufacturing"],
+    metroPopulation: 508000,
+    annualSunnyDays: 217,
   }),
 ];
 
@@ -351,5 +398,7 @@ export function makePartialCity(
     childcareMonthly: null,
     takeHomeAfterChildcarePct: null,
     careerHubFor: [],
+    metroPopulation: null,
+    annualSunnyDays: null,
   };
 }
