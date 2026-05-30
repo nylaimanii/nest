@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
   CITIES,
@@ -20,6 +21,15 @@ import type { FilingStatus } from "@/lib/sim/tax";
 import { useSimStore } from "@/store/sim";
 import type { SimInputs } from "@/types";
 
+/** transient banner state set when the geocoder fails on a typed city.
+ *  the sim's city is reverted to the previous valid value; the banner
+ *  surfaces what was typed + what we kept. auto-dismissed by the
+ *  CityResolveBanner consumer after 4s. */
+export interface CityResolveError {
+  typed: string;
+  revertedTo: string | null;
+}
+
 interface AtlasState {
   weights: AtlasWeights;
   draftWeights: AtlasWeights;
@@ -37,6 +47,9 @@ interface AtlasState {
 
   selectedAlternateId: string | null;
   setSelectedAlternateId: (id: string | null) => void;
+
+  cityResolveError: CityResolveError | null;
+  clearCityResolveError: () => void;
 }
 
 const DEFAULT_WEIGHTS: AtlasWeights = {
@@ -115,7 +128,11 @@ async function fetchCityProfile(q: string): Promise<CityProfile | null> {
   }
 }
 
-async function kickoffResolveTarget(city: string, inputs: SimInputs) {
+async function kickoffResolveTarget(
+  city: string,
+  inputs: SimInputs,
+  prevCity?: string,
+) {
   const seq = ++resolveSeq;
 
   const local = findCityByName(city);
@@ -140,11 +157,39 @@ async function kickoffResolveTarget(city: string, inputs: SimInputs) {
   if (seq !== resolveSeq) return;
 
   if (!profile) {
+    // geocoder gave up — revert the sim's city to the previous valid one
+    // so the math doesn't run against unresolved garbage ("lorem ipsum"
+    // labeled as international was the QA case). banner surfaces the
+    // revert so the user knows what changed.
+    const prevRecord =
+      prevCity && prevCity !== city ? findCityByName(prevCity) : null;
+    if (prevRecord && prevCity) {
+      const revertedInputs: SimInputs = { ...inputs, city: prevCity };
+      const alternates = computeAlternates(
+        prevRecord,
+        useAtlasStore.getState().weights,
+        revertedInputs,
+      );
+      useAtlasStore.setState({
+        target: prevRecord,
+        isResolvingTarget: false,
+        alternates,
+        selectedAlternateId: null,
+        cityResolveError: { typed: city, revertedTo: prevCity },
+      });
+      // revert the sim store last — its subscribe will re-enter this
+      // function with prevCity, but seq has been bumped so the stale 404
+      // result can't race, and the re-entry's setState merges partials
+      // so cityResolveError survives.
+      useSimStore.getState().applyInputs({ city: prevCity });
+      return;
+    }
     useAtlasStore.setState({
       target: null,
       isResolvingTarget: false,
       alternates: [],
       selectedAlternateId: null,
+      cityResolveError: { typed: city, revertedTo: null },
     });
     return;
   }
@@ -161,55 +206,119 @@ async function kickoffResolveTarget(city: string, inputs: SimInputs) {
 }
 
 // ---- initial state --------------------------------------------------------
+// pull the seed city from the sim store at module load. when sim is
+// persisted, this is the user's last city; on first visit it's
+// DEFAULT_INPUTS.city. findCityByName resolves dataset hits synchronously
+// — global / partial cities resolve via the post-creation kickoff below.
 
-const INITIAL_TARGET = findCityByName("new york, ny");
 const INITIAL_INPUTS = useSimStore.getState().inputs;
+const INITIAL_TARGET = findCityByName(INITIAL_INPUTS.city);
 const INITIAL_ALTERNATES = computeAlternates(
   INITIAL_TARGET,
   DEFAULT_WEIGHTS,
   INITIAL_INPUTS,
 );
 
-export const useAtlasStore = create<AtlasState>((set) => ({
-  weights: DEFAULT_WEIGHTS,
-  draftWeights: DEFAULT_WEIGHTS,
-  isWeightsDirty: false,
+// persistence: localStorage under "nest.atlas.v1". only the weight slider
+// state is stored — the target city + alternates are derived from the sim
+// store's inputs (which has its own persist) and re-resolve on rehydrate
+// via the sim → atlas subscribe below. CityRecord includes a non-
+// serializable closure (takeHomeAfterChildcarePct) so we deliberately
+// can't persist the target directly anyway.
+export const useAtlasStore = create<AtlasState>()(
+  persist(
+    (set) => ({
+      weights: DEFAULT_WEIGHTS,
+      draftWeights: DEFAULT_WEIGHTS,
+      isWeightsDirty: false,
 
-  setDraftWeight: (k, v) =>
-    set((state) => {
-      const draftWeights = { ...state.draftWeights, [k]: v };
-      return {
-        draftWeights,
-        isWeightsDirty: !weightsEqual(draftWeights, state.weights),
-      };
+      setDraftWeight: (k, v) =>
+        set((state) => {
+          const draftWeights = { ...state.draftWeights, [k]: v };
+          return {
+            draftWeights,
+            isWeightsDirty: !weightsEqual(draftWeights, state.weights),
+          };
+        }),
+
+      recompute: () =>
+        set((state) => {
+          const inputs = useSimStore.getState().inputs;
+          const alternates = computeAlternates(
+            state.target,
+            state.draftWeights,
+            inputs,
+          );
+          const stillSelected =
+            state.selectedAlternateId !== null &&
+            alternates.some((a) => a.id === state.selectedAlternateId);
+          return {
+            weights: state.draftWeights,
+            alternates,
+            selectedAlternateId: stillSelected
+              ? state.selectedAlternateId
+              : null,
+            isWeightsDirty: false,
+          };
+        }),
+
+      target: INITIAL_TARGET,
+      isResolvingTarget: false,
+      alternates: INITIAL_ALTERNATES,
+      selectedAlternateId: null,
+
+      setSelectedAlternateId: (id) => set({ selectedAlternateId: id }),
+
+      cityResolveError: null,
+      clearCityResolveError: () => set({ cityResolveError: null }),
     }),
+    {
+      name: "nest.atlas.v1",
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        weights: state.weights,
+        draftWeights: state.draftWeights,
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AtlasState>;
+        const weights: AtlasWeights = {
+          ...current.weights,
+          ...(p.weights ?? {}),
+        };
+        const draftWeights: AtlasWeights = {
+          ...current.draftWeights,
+          ...(p.draftWeights ?? {}),
+        };
+        // recompute alternates against the (already-rehydrated) sim inputs
+        // and the persisted weights so the right panel is consistent the
+        // moment the page becomes interactive.
+        const sim = useSimStore.getState();
+        const alternates = computeAlternates(
+          current.target,
+          weights,
+          sim.inputs,
+        );
+        return {
+          ...current,
+          weights,
+          draftWeights,
+          alternates,
+          isWeightsDirty: !weightsEqual(weights, draftWeights),
+        };
+      },
+    },
+  ),
+);
 
-  recompute: () =>
-    set((state) => {
-      const inputs = useSimStore.getState().inputs;
-      const alternates = computeAlternates(
-        state.target,
-        state.draftWeights,
-        inputs,
-      );
-      const stillSelected =
-        state.selectedAlternateId !== null &&
-        alternates.some((a) => a.id === state.selectedAlternateId);
-      return {
-        weights: state.draftWeights,
-        alternates,
-        selectedAlternateId: stillSelected ? state.selectedAlternateId : null,
-        isWeightsDirty: false,
-      };
-    }),
-
-  target: INITIAL_TARGET,
-  isResolvingTarget: false,
-  alternates: INITIAL_ALTERNATES,
-  selectedAlternateId: null,
-
-  setSelectedAlternateId: (id) => set({ selectedAlternateId: id }),
-}));
+// post-creation: if sim has a persisted city that the dataset doesn't
+// cover (e.g. "tokyo, japan"), INITIAL_TARGET is null — kick off the
+// async cityProfile resolver so the atlas catches up. fired once at
+// module load on the client; the sim → atlas subscribe handles every
+// subsequent city change.
+if (typeof window !== "undefined" && !INITIAL_TARGET && INITIAL_INPUTS.city) {
+  void kickoffResolveTarget(INITIAL_INPUTS.city, INITIAL_INPUTS);
+}
 
 // ---- sim → atlas sync -----------------------------------------------------
 
@@ -229,8 +338,9 @@ useSimStore.subscribe((state, prev) => {
 
   if (cityChanged) {
     // fire-and-forget; the kickoff function manages isResolvingTarget + the
-    // sequence guard. errors are swallowed inside fetchCityProfile.
-    void kickoffResolveTarget(a.city, a);
+    // sequence guard + the banner-on-failure revert. errors are swallowed
+    // inside fetchCityProfile.
+    void kickoffResolveTarget(a.city, a, b.city);
     return;
   }
 

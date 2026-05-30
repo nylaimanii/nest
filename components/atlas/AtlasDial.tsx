@@ -18,6 +18,11 @@ export interface AtlasDialProps {
   leftAnchor?: string;
   /** small all-caps mono label pinned to the right edge under the track. */
   rightAnchor?: string;
+  /** small italic mono muted line rendered under the anchors. used by
+   *  onboarding to surface "drag to set work intensity" when the user
+   *  hasn't touched the dial yet (so the visible value isn't read as a
+   *  confirmed choice). */
+  placeholder?: string;
   className?: string;
 }
 
@@ -37,10 +42,15 @@ export function AtlasDial({
   format = (v) => String(v),
   leftAnchor,
   rightAnchor,
+  placeholder,
   className,
 }: AtlasDialProps) {
   const range = Math.max(max - min, 1);
   const pct = Math.min(Math.max(((value - min) / range) * 100, 0), 100);
+
+  // when a placeholder is shown, dim the live value + track so it reads
+  // as "not yet chosen" rather than a confident displayed setting.
+  const unset = !!placeholder;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -48,7 +58,10 @@ export function AtlasDial({
       <div className="relative flex flex-col gap-2 pt-6">
         {/* live value, floats above the thumb position. */}
         <span
-          className="pointer-events-none absolute -translate-x-1/2 font-mono text-[0.8rem] text-ink"
+          className={cn(
+            "pointer-events-none absolute -translate-x-1/2 font-mono text-[0.8rem]",
+            unset ? "text-muted" : "text-ink",
+          )}
           style={{ left: `${pct}%`, top: 0 }}
         >
           {format(value)}
@@ -61,7 +74,7 @@ export function AtlasDial({
           value={value}
           onChange={(e) => onChange(Number(e.currentTarget.value))}
           aria-label={label}
-          className="atlas-slider"
+          className={cn("atlas-slider", unset && "opacity-60")}
           style={{
             background: `linear-gradient(to right, var(--color-green) 0%, var(--color-green) ${pct}%, var(--color-line) ${pct}%, var(--color-line) 100%)`,
           }}
@@ -75,6 +88,11 @@ export function AtlasDial({
               {rightAnchor ?? ""}
             </span>
           </div>
+        ) : null}
+        {placeholder ? (
+          <span className="font-mono text-[0.7rem] italic text-muted">
+            {placeholder}
+          </span>
         ) : null}
       </div>
     </div>

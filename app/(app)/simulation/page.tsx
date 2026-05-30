@@ -1,5 +1,6 @@
 import { MonoLabel } from "@/components/atlas";
 import { RecomputeButton } from "@/components/atlas/RecomputeButton";
+import { CityResolveBanner } from "@/components/sim/CityResolveBanner";
 import { HonestPanel } from "@/components/sim/HonestPanel";
 import { InputPanel } from "@/components/sim/InputPanel";
 import { RegretGap } from "@/components/sim/RegretGap";
@@ -20,6 +21,8 @@ export default function SimulationPage() {
         </div>
         <RecomputeButton />
       </div>
+
+      <CityResolveBanner />
 
       <RegretGap />
 

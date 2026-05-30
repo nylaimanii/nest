@@ -1,6 +1,13 @@
 // DETERMINISTIC. maps classification themes + tags to specific SimInputs
 // changes the user can opt into after the reflection. no LLM — every
 // number / new value is computed here in code (CLAUDE.md determinism).
+//
+// design rule (post-review): mourning-the-gap signals NEVER reduce
+// kidsWanted. uncertainty about a particular kid means "what would it
+// take to keep that kid?" — which is earlier startAge or higher work
+// intensity, not cutting the wanted target. kidsWanted is the user's
+// explicit declared goal on /simulation; the suggestion engine doesn't
+// override it. money pressure alone is also not a reason to cut kids.
 
 import type { QuestionEntry } from "@/lib/ai/types";
 import type { GapSummary } from "./drift";
@@ -29,15 +36,31 @@ function hasTagMatching(entry: QuestionEntry, re: RegExp): boolean {
   );
 }
 
+/** propose an earlier startAge by `years` (capped at userAge — can't
+ *  start before you exist). returns null if the move would be a no-op
+ *  (already at userAge, or `years` <= 0). */
+function earlierStartSuggestion(
+  inputs: SimInputs,
+  years: number,
+  reason: string,
+): SimSuggestion | null {
+  if (years <= 0) return null;
+  if (inputs.startAge <= inputs.userAge) return null;
+  const next = Math.max(inputs.userAge, inputs.startAge - years);
+  if (next === inputs.startAge) return null;
+  return { field: "startAge", from: inputs.startAge, to: next, reason };
+}
+
 export function suggestSimChanges(
   history: QuestionEntry[],
   inputs: SimInputs,
-  _gap: GapSummary,
+  gap: GapSummary,
 ): SimSuggestion[] {
   const out: SimSuggestion[] = [];
   const usedFields = new Set<keyof SimInputs>();
 
-  const push = (s: SimSuggestion) => {
+  const push = (s: SimSuggestion | null) => {
+    if (s === null) return;
     if (out.length >= 3) return;
     if (usedFields.has(s.field)) return;
     if (s.from === s.to) return;
@@ -46,6 +69,9 @@ export function suggestSimChanges(
   };
 
   // 1) repeated money worry → bump work intensity up (capped at 70hrs).
+  //    intentionally does NOT touch kidsWanted — "I'm worried about money"
+  //    is not "I want fewer kids," it's "I need more income for the kids
+  //    I want."
   const moneyHits = history.filter(
     (h) =>
       (h.classification?.stance === "avoidant" ||
@@ -65,55 +91,50 @@ export function suggestSimChanges(
     }
   }
 
-  // 2) support_system answer suggests no backup → fewer kids modeled.
+  // 2) no-backup support signal → model earlier start to close the gap
+  //    without cutting the wanted kid count. previously this branch
+  //    suggested kidsWanted - 1, which contradicted "the user knows what
+  //    they want" — fix per post-review.
   const support = entryHasTheme(history, "support_system");
-  if (support && hasTagMatching(support, NO_BACKUP_RE) && inputs.kidsWanted > 0) {
-    const next = Math.max(1, inputs.kidsWanted - 1);
-    if (next !== inputs.kidsWanted) {
-      push({
-        field: "kidsWanted",
-        from: inputs.kidsWanted,
-        to: next,
-        reason:
-          "with no clear support backup, modeling one fewer kid surfaces the load honestly.",
-      });
-    }
+  if (support && hasTagMatching(support, NO_BACKUP_RE) && gap.kidGap > 0) {
+    push(
+      earlierStartSuggestion(
+        inputs,
+        3,
+        "no clear support backup makes the drift delay costlier; starting 3 years earlier closes the gap without cutting kids.",
+      ),
+    );
   }
 
-  // 3) hesitation on the second kid → model one.
+  // 3) uncertain on the second kid → the right read is "what would it
+  //    take to keep that second kid?", not "cut to one." propose an
+  //    earlier start so the fertility window includes the second arrival.
   const secondKid = entryHasTheme(history, "the_second_kid");
   if (
     secondKid &&
     (secondKid.classification?.stance === "uncertain" ||
       secondKid.classification?.stance === "avoidant") &&
-    inputs.kidsWanted >= 2
+    gap.kidGap > 0
   ) {
-    push({
-      field: "kidsWanted",
-      from: inputs.kidsWanted,
-      to: 1,
-      reason:
-        "your answer about the second kid was uncertain; modeling one shows that path clearly.",
-    });
+    push(
+      earlierStartSuggestion(
+        inputs,
+        3,
+        "your uncertainty about the second kid maps to the timing — starting 3 years earlier puts both arrivals inside the fertility window.",
+      ),
+    );
   }
 
-  // 4) drift surprise → earlier start.
+  // 4) drift surprise → earlier start by 2.
   const drift = entryHasTheme(history, "drift_awareness");
-  if (
-    drift &&
-    hasTagMatching(drift, SURPRISE_RE) &&
-    inputs.startAge > inputs.userAge
-  ) {
-    const next = Math.max(inputs.userAge, inputs.startAge - 2);
-    if (next !== inputs.startAge) {
-      push({
-        field: "startAge",
-        from: inputs.startAge,
-        to: next,
-        reason:
-          "since the drift surprised you, modeling two years earlier shows what active planning buys.",
-      });
-    }
+  if (drift && hasTagMatching(drift, SURPRISE_RE)) {
+    push(
+      earlierStartSuggestion(
+        inputs,
+        2,
+        "since the drift surprised you, modeling two years earlier shows what active planning buys.",
+      ),
+    );
   }
 
   return out;

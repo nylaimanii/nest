@@ -21,11 +21,26 @@ export function QuestionStage() {
   const busy = status === "loading_question" || status === "classifying";
   const labelN = Math.min(history.length + 1, 5);
 
-  const canSubmit =
-    !busy && status === "awaiting_answer" && answer.trim().length > 4;
+  // minimum length for a "real" answer. matches the onboarding modal
+  // pattern: continue is always clickable, but a click on a too-short
+  // answer surfaces an inline hint rather than silently doing nothing.
+  const MIN_ANSWER_LEN = 10;
+  const trimmedLen = answer.trim().length;
+  const inputReady = !busy && status === "awaiting_answer";
+  const answerLongEnough = trimmedLen >= MIN_ANSWER_LEN;
+  const [showTooShortHint, setShowTooShortHint] = useState(false);
+
+  // hint clears as soon as the user types something long enough.
+  useEffect(() => {
+    if (answerLongEnough && showTooShortHint) setShowTooShortHint(false);
+  }, [answerLongEnough, showTooShortHint]);
 
   const onSubmit = () => {
-    if (!canSubmit) return;
+    if (!inputReady) return;
+    if (!answerLongEnough) {
+      setShowTooShortHint(true);
+      return;
+    }
     void submit(answer);
   };
 
@@ -71,28 +86,39 @@ export function QuestionStage() {
           aria-label="your answer"
           className="w-full resize-none rounded-[2px] border border-line bg-bone p-4 font-sans text-[1.05rem] text-ink placeholder:italic placeholder:text-muted focus:border-green focus:outline-none"
         />
-        <div className="flex items-baseline justify-between">
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={busy}
-            className="font-serif text-[0.9rem] italic text-muted transition-colors hover:text-ink disabled:hover:text-muted"
-          >
-            i don&apos;t know yet
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={!canSubmit}
-            className={cn(
-              "font-serif text-[1rem] italic transition-colors",
-              canSubmit
-                ? "text-green hover:text-green-2"
-                : "text-muted",
-            )}
-          >
-            continue →
-          </button>
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={onSkip}
+                disabled={busy}
+                className="self-start font-serif text-[0.9rem] italic text-muted transition-colors hover:text-ink disabled:hover:text-muted"
+              >
+                skip — i&apos;m not sure
+              </button>
+              <span className="font-mono text-[0.65rem] italic text-muted">
+                we&apos;ll mark this as undecided and continue.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onSubmit}
+              className={cn(
+                "self-end font-serif text-[1rem] italic transition-colors",
+                inputReady && answerLongEnough
+                  ? "text-green hover:text-green-2"
+                  : "text-muted hover:text-ink",
+              )}
+            >
+              continue →
+            </button>
+          </div>
+          {showTooShortHint && !answerLongEnough ? (
+            <span className="self-end font-mono text-[0.7rem] italic text-terracotta">
+              answers need at least a sentence — your gap and the math deserve more than that.
+            </span>
+          ) : null}
         </div>
         {status === "classifying" ? (
           <span className="font-mono text-[0.7rem] text-muted">listening…</span>

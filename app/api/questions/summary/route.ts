@@ -14,6 +14,12 @@ interface Body {
   history: QuestionEntry[];
   inputs: SimInputs;
   gap: GapSummary;
+  /** snapshot fields the LLM references for concrete numbers. optional
+   *  for backward compat — if missing, the summary falls back to gap-only
+   *  prose without the precise dollar/percent anchors. */
+  burdenRatio?: number;
+  childcareMonthlyUsed?: number | null;
+  cumulativeChildCost?: number[];
 }
 
 export async function POST(req: Request) {
@@ -23,7 +29,14 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const { history = [], inputs, gap } = body;
+  const {
+    history = [],
+    inputs,
+    gap,
+    burdenRatio,
+    childcareMonthlyUsed,
+    cumulativeChildCost,
+  } = body;
   if (!inputs || !gap || history.length === 0) {
     return NextResponse.json(
       { error: "missing inputs, gap, or history" },
@@ -37,8 +50,17 @@ export async function POST(req: Request) {
   // since the UI requires the summary.
   const suggestions = suggestSimChanges(history, inputs, gap);
 
+  const snap =
+    burdenRatio !== undefined && childcareMonthlyUsed !== undefined
+      ? {
+          burdenRatio,
+          childcareMonthlyUsed,
+          cumulativeChildCost,
+        }
+      : undefined;
+
   try {
-    const summary = await generateSummary(history, inputs, gap);
+    const summary = await generateSummary(history, inputs, gap, snap);
     return NextResponse.json({ summary, suggestions });
   } catch (err) {
     if (err instanceof GroqUnconfiguredError) {

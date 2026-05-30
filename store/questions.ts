@@ -124,6 +124,11 @@ export const useQuestionsStore = create<QuestionsState>((set, get) => ({
         history,
         inputs: sim.inputs,
         gap: sim.gap,
+        // snapshot context the new prompt uses to anchor on real numbers
+        // (childcare burden %, 10-year cost, etc).
+        burdenRatio: sim.snapshot.burdenRatio,
+        childcareMonthlyUsed: sim.snapshot.childcareMonthlyUsed,
+        cumulativeChildCost: sim.snapshot.cumulativeChildCost,
       });
       if (!s.ok || !s.data) {
         set({ status: "error", errorMessage: s.error });

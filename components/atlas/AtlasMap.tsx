@@ -53,10 +53,18 @@ function TargetPin({ city, onClick }: { city: CityRecord; onClick: () => void })
   );
 }
 
-function TargetLabel({ city }: { city: CityRecord }) {
+function TargetLabel({
+  city,
+  offsetY,
+  hidden,
+}: {
+  city: CityRecord;
+  offsetY: number;
+  hidden: boolean;
+}) {
+  if (hidden) return null;
   const side = labelSide(city.lng);
   const offsetX = side === "right" ? LABEL_OFFSET_X : -LABEL_OFFSET_X;
-  const offsetY = -LABEL_OFFSET_Y;
   return (
     <Marker longitude={city.lng} latitude={city.lat} anchor="center">
       <div
@@ -157,16 +165,18 @@ function AlternateLabel({
   city,
   rank,
   total,
-  rowIndex,
+  offsetY,
+  hidden,
 }: {
   city: CityRecord;
   rank: number;
   total: number | null;
-  rowIndex: number;
+  offsetY: number;
+  hidden: boolean;
 }) {
+  if (hidden) return null;
   const side = labelSide(city.lng);
   const offsetX = side === "right" ? LABEL_OFFSET_X : -LABEL_OFFSET_X;
-  const offsetY = (rowIndex % 2 === 0 ? -1 : 1) * LABEL_OFFSET_Y;
   return (
     <Marker longitude={city.lng} latitude={city.lat} anchor="center">
       <div
@@ -215,6 +225,139 @@ function AlternateLabel({
   );
 }
 
+// ---- label-collision pass --------------------------------------------------
+// approximate label widths in pixels — measured by eye against the atlas
+// type, accurate enough for collision detection at the precision we care
+// about (whether two labels overlap). too small = false-negative overlaps;
+// too large = unnecessary shifts. err small so labels stay visible.
+const TARGET_LABEL_W = 180;
+const ALT_LABEL_W = 160;
+const LABEL_H = 22;
+const COLLISION_BUFFER = 6;
+
+interface LabelLayout {
+  offsetY: number;
+  hidden: boolean;
+}
+
+interface LabelInput {
+  id: string;
+  lng: number;
+  lat: number;
+  isTarget: boolean;
+  baseRowIndex: number;
+  width: number;
+}
+
+function recomputeLayouts(
+  map: ReturnType<MapRef["getMap"]>,
+  entries: LabelInput[],
+): Record<string, LabelLayout> {
+  // candidate vertical offsets from base. four shift attempts before we
+  // hide the label entirely (and only alternates are hidable — target
+  // always wins). spec: "limit shifts to 2 attempts" → we try 5 positions
+  // total (base + 4 alternatives) which gives plenty of room without
+  // becoming a placement minigame.
+  const SHIFTS = [0, 24, -24, 48, -48];
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const layouts: Record<string, LabelLayout> = {};
+
+  // target first so it gets first pick.
+  const sorted = [...entries].sort(
+    (a, b) => (b.isTarget ? 1 : 0) - (a.isTarget ? 1 : 0),
+  );
+
+  for (const e of sorted) {
+    const pt = map.project([e.lng, e.lat]);
+    const side: "right" | "left" = e.lng < PIVOT_LNG ? "right" : "left";
+    const baseY = e.isTarget
+      ? -LABEL_OFFSET_Y
+      : (e.baseRowIndex % 2 === 0 ? -1 : 1) * LABEL_OFFSET_Y;
+    const labelLeft =
+      side === "right" ? pt.x + LABEL_OFFSET_X : pt.x - LABEL_OFFSET_X - e.width;
+
+    let chosenOffsetY: number | null = null;
+    for (const shift of SHIFTS) {
+      const offY = baseY + shift;
+      const labelTop = pt.y + offY - LABEL_H / 2;
+      const overlaps = placed.some(
+        (p) =>
+          labelLeft < p.x + p.w + COLLISION_BUFFER &&
+          labelLeft + e.width > p.x - COLLISION_BUFFER &&
+          labelTop < p.y + p.h + COLLISION_BUFFER &&
+          labelTop + LABEL_H > p.y - COLLISION_BUFFER,
+      );
+      if (!overlaps) {
+        chosenOffsetY = offY;
+        placed.push({ x: labelLeft, y: labelTop, w: e.width, h: LABEL_H });
+        break;
+      }
+    }
+
+    if (chosenOffsetY !== null) {
+      layouts[e.id] = { offsetY: chosenOffsetY, hidden: false };
+    } else if (e.isTarget) {
+      // target never hides — accept the overlap on the base position.
+      layouts[e.id] = { offsetY: baseY, hidden: false };
+    } else {
+      layouts[e.id] = { offsetY: baseY, hidden: true };
+    }
+  }
+  return layouts;
+}
+
+function useLabelLayouts(
+  mapRef: React.RefObject<MapRef | null>,
+  target: CityRecord | null,
+  alternates: CityRecord[],
+  mapReady: boolean,
+): Record<string, LabelLayout> {
+  const [layouts, setLayouts] = useState<Record<string, LabelLayout>>({});
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const entries: LabelInput[] = [];
+    if (target) {
+      entries.push({
+        id: target.id,
+        lng: target.lng,
+        lat: target.lat,
+        isTarget: true,
+        baseRowIndex: 0,
+        width: TARGET_LABEL_W,
+      });
+    }
+    alternates.forEach((c, i) => {
+      entries.push({
+        id: c.id,
+        lng: c.lng,
+        lat: c.lat,
+        isTarget: false,
+        baseRowIndex: i,
+        width: ALT_LABEL_W,
+      });
+    });
+
+    function update() {
+      setLayouts(recomputeLayouts(map!, entries));
+    }
+    update();
+    map.on("move", update);
+    map.on("zoom", update);
+    map.on("resize", update);
+    return () => {
+      map.off("move", update);
+      map.off("zoom", update);
+      map.off("resize", update);
+    };
+  }, [mapRef, target, alternates, mapReady]);
+
+  return layouts;
+}
+
 export function AtlasMap() {
   const target = useAtlasStore((s) => s.target);
   const alternates = useAtlasStore((s) => s.alternates);
@@ -248,6 +391,8 @@ export function AtlasMap() {
 
   useFitToAtlas(mapRef, target, alternates, mapReady);
 
+  const labelLayouts = useLabelLayouts(mapRef, target, alternates, mapReady);
+
   // score alternates once for label totals — same ctx the engine used.
   const alternateScores = useMemo(() => {
     const ctx = contextFrom(simInputs, weights);
@@ -275,7 +420,13 @@ export function AtlasMap() {
         >
           {target ? (
             <Fragment>
-              <TargetLabel city={target} />
+              <TargetLabel
+                city={target}
+                offsetY={
+                  labelLayouts[target.id]?.offsetY ?? -LABEL_OFFSET_Y
+                }
+                hidden={labelLayouts[target.id]?.hidden ?? false}
+              />
               <TargetPin
                 city={target}
                 onClick={() => setSelectedAlternateId(null)}
@@ -286,13 +437,19 @@ export function AtlasMap() {
             const rank = i + 1;
             const score = alternateScores[i];
             const selected = city.id === selectedAlternateId;
+            // fall back to the staggered default offset if the collision
+            // pass hasn't populated yet (first paint before mapReady).
+            const fallbackOffsetY =
+              (i % 2 === 0 ? -1 : 1) * LABEL_OFFSET_Y;
+            const layout = labelLayouts[city.id];
             return (
               <Fragment key={city.id}>
                 <AlternateLabel
                   city={city}
                   rank={rank}
                   total={score?.total ?? null}
-                  rowIndex={i}
+                  offsetY={layout?.offsetY ?? fallbackOffsetY}
+                  hidden={layout?.hidden ?? false}
                 />
                 <AlternatePin
                   city={city}

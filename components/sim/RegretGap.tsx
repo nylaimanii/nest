@@ -118,13 +118,18 @@ export function RegretGap() {
           <MonoLabel tone={gapZero ? "green" : "terracotta"}>
             {onTrack ? "NO GAP — YOU'RE ON TRACK" : "THE GAP"}
           </MonoLabel>
+          {/* the gap is a positive count of kids short — terracotta color
+              communicates "this is a gap." rendering it with a minus sign
+              read as a delta from a baseline and contradicted /compare,
+              which shows the same number unsigned. unified: positive
+              integer everywhere; tone carries the meaning. */}
           <div
             className={cn(
               "font-mono text-[3.5rem] leading-none transition-colors duration-700 ease-out",
               gapZero ? "text-green" : "text-terracotta",
             )}
           >
-            {gapDisplay > 0 ? `−${gapDisplay}` : "0"}
+            {Math.abs(gapDisplay)}
           </div>
         </div>
 

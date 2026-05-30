@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import { DEFAULT_INPUTS } from "@/lib/sim/defaults";
 import {
@@ -55,55 +56,99 @@ function inputsEqual(a: SimInputs, b: SimInputs): boolean {
 // typed keystroke updates draftInputs in place and flips isDirty; the
 // snapshot stays frozen on the previously-committed inputs so charts +
 // honest panel never flicker mid-edit.
-export const useSimStore = create<SimState>((set) => ({
-  draftInputs: DEFAULT_INPUTS,
-  inputs: DEFAULT_INPUTS,
-  snapshot: runSim(DEFAULT_INPUTS),
-  driftSnapshot: runDrift(DEFAULT_INPUTS),
-  gap: gapSummary(DEFAULT_INPUTS),
-  isDirty: false,
-
-  setDraftInput: (k, v) =>
-    set((state) => {
-      const draftInputs = { ...state.draftInputs, [k]: v };
-      return { draftInputs, isDirty: !inputsEqual(draftInputs, state.inputs) };
-    }),
-
-  recompute: () =>
-    set((state) => ({
-      inputs: state.draftInputs,
-      snapshot: runSim(state.draftInputs),
-      driftSnapshot: runDrift(state.draftInputs),
-      gap: gapSummary(state.draftInputs),
-      isDirty: false,
-    })),
-
-  applyInputs: (next) =>
-    set((state) => {
-      const merged: SimInputs = { ...state.inputs, ...next };
-      return {
-        draftInputs: merged,
-        inputs: merged,
-        snapshot: runSim(merged),
-        driftSnapshot: runDrift(merged),
-        gap: gapSummary(merged),
-        isDirty: false,
-      };
-    }),
-
-  reset: () =>
-    set({
+//
+// persistence: localStorage under "nest.sim.v1". only inputs + draftInputs
+// are stored — snapshot/drift/gap are derived and regenerate via the merge
+// callback on rehydrate, so navigating away and back (or refreshing) keeps
+// edits intact without paying to serialize 10-year arrays.
+export const useSimStore = create<SimState>()(
+  persist(
+    (set) => ({
       draftInputs: DEFAULT_INPUTS,
       inputs: DEFAULT_INPUTS,
       snapshot: runSim(DEFAULT_INPUTS),
       driftSnapshot: runDrift(DEFAULT_INPUTS),
       gap: gapSummary(DEFAULT_INPUTS),
       isDirty: false,
-      revealStage: 0,
-    }),
 
-  // open the simulation on the gap split, not on a click-to-reveal teaser.
-  // stage 0 is reachable via the stage-3 "start over" action as a reset.
-  revealStage: 1,
-  setRevealStage: (s) => set({ revealStage: s }),
-}));
+      setDraftInput: (k, v) =>
+        set((state) => {
+          const draftInputs = { ...state.draftInputs, [k]: v };
+          return {
+            draftInputs,
+            isDirty: !inputsEqual(draftInputs, state.inputs),
+          };
+        }),
+
+      recompute: () =>
+        set((state) => ({
+          inputs: state.draftInputs,
+          snapshot: runSim(state.draftInputs),
+          driftSnapshot: runDrift(state.draftInputs),
+          gap: gapSummary(state.draftInputs),
+          isDirty: false,
+        })),
+
+      applyInputs: (next) =>
+        set((state) => {
+          const merged: SimInputs = { ...state.inputs, ...next };
+          return {
+            draftInputs: merged,
+            inputs: merged,
+            snapshot: runSim(merged),
+            driftSnapshot: runDrift(merged),
+            gap: gapSummary(merged),
+            isDirty: false,
+          };
+        }),
+
+      reset: () =>
+        set({
+          draftInputs: DEFAULT_INPUTS,
+          inputs: DEFAULT_INPUTS,
+          snapshot: runSim(DEFAULT_INPUTS),
+          driftSnapshot: runDrift(DEFAULT_INPUTS),
+          gap: gapSummary(DEFAULT_INPUTS),
+          isDirty: false,
+          revealStage: 0,
+        }),
+
+      // open the simulation on the gap split, not on a click-to-reveal teaser.
+      // stage 0 is reachable via the stage-3 "start over" action as a reset.
+      revealStage: 1,
+      setRevealStage: (s) => set({ revealStage: s }),
+    }),
+    {
+      name: "nest.sim.v1",
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        inputs: state.inputs,
+        draftInputs: state.draftInputs,
+      }),
+      // merge persisted partial onto the current initial state. each input
+      // object is spread over DEFAULT_INPUTS so new fields added in future
+      // versions (added a partner field, etc) default cleanly when the
+      // persisted blob is older. derived state (snapshot/drift/gap) is
+      // recomputed from the merged inputs so we don't have to serialize
+      // 10-year arrays.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SimState>;
+        const inputs: SimInputs = { ...current.inputs, ...(p.inputs ?? {}) };
+        const draftInputs: SimInputs = {
+          ...current.draftInputs,
+          ...(p.draftInputs ?? {}),
+        };
+        return {
+          ...current,
+          inputs,
+          draftInputs,
+          snapshot: runSim(inputs),
+          driftSnapshot: runDrift(inputs),
+          gap: gapSummary(inputs),
+          isDirty: !inputsEqual(draftInputs, inputs),
+        };
+      },
+    },
+  ),
+);

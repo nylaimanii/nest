@@ -63,11 +63,22 @@ export function AtlasTextInput({
 }: AtlasTextInputProps) {
   const [buffer, setBuffer] = useState(value === "" ? "" : String(value));
   const [focused, setFocused] = useState(false);
+  /** transient mono hint that surfaces when a typed value was clamped to
+   *  min/max on blur. fades after 3s. lets users notice silent corrections
+   *  ("clamped to 55") instead of staring at an unexplained value swap. */
+  const [clampNotice, setClampNotice] = useState<string | null>(null);
 
   // keep buffer in sync when the parent value changes (e.g. scenario load).
   useEffect(() => {
     setBuffer(value === "" ? "" : String(value));
   }, [value]);
+
+  // auto-dismiss the clamp notice after 3s so it doesn't linger.
+  useEffect(() => {
+    if (clampNotice === null) return;
+    const t = window.setTimeout(() => setClampNotice(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [clampNotice]);
 
   const isCurrency = format === "currency";
 
@@ -89,21 +100,25 @@ export function AtlasTextInput({
     if (min !== undefined && n < min) {
       setBuffer(String(min));
       onChange(String(min));
+      setClampNotice(`clamped to ${min}`);
       return;
     }
     if (max !== undefined && n > max) {
       setBuffer(String(max));
       onChange(String(max));
+      setClampNotice(`clamped to ${max}`);
     }
   }
 
-  // currency: text input always; display switches on focus.
+  // currency: text input always; display switches on focus. only render
+  // the formatted "$X,XXX" when the controlled value is a real number —
+  // an empty string previously coerced to 0 and showed up as "$0" in the
+  // onboarding modal's HOUSEHOLD INCOME field, which then failed the
+  // required-validator with no way for the user to satisfy.
   const effectiveType = isCurrency ? "text" : type;
-  const numericValue =
-    typeof value === "number" ? value : Number(value);
   const displayValue =
-    isCurrency && !focused && Number.isFinite(numericValue)
-      ? `$${numericValue.toLocaleString("en-US")}`
+    isCurrency && !focused && typeof value === "number" && Number.isFinite(value)
+      ? `$${value.toLocaleString("en-US")}`
       : buffer;
 
   return (
@@ -137,6 +152,10 @@ export function AtlasTextInput({
       {error ? (
         <span className="font-mono text-[0.7rem] italic text-terracotta">
           {error}
+        </span>
+      ) : clampNotice ? (
+        <span className="font-mono text-[0.7rem] italic text-muted">
+          {clampNotice}
         </span>
       ) : hint ? (
         <span className="font-mono text-[0.7rem] italic text-muted">
